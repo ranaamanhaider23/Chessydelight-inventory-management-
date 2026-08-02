@@ -7,54 +7,11 @@ import os
 st.set_page_config(page_title="Cheesy Delights | Complete Manager", layout="wide")
 
 # ==========================================
-# 🎨 CUSTOM CSS TO FIX SCROLLING & UI FOCUS
-# ==========================================
-st.markdown("""
-    <style>
-        /* Prevent jarring page jumps on data edits */
-        .stDataFrame, .stDataEditor {
-            overflow-x: auto;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# ==========================================
 # 📁 DATA STORAGE FILES (CSV)
 # ==========================================
 INVENTORY_FILE = "inventory_records.csv"
 EXPENSES_FILE = "expenses_records.csv"
 SETTINGS_FILE = "settings.csv"
-AUTH_FILE = "auth_settings.csv"
-
-# ==========================================
-# 🔐 AUTHENTICATION & LOGIN SYSTEM
-# ==========================================
-if os.path.exists(AUTH_FILE):
-    auth_df = pd.read_csv(AUTH_FILE)
-    saved_user = auth_df.loc[auth_df['Key'] == 'username', 'Value'].values[0] if 'username' in auth_df['Key'].values else "admin"
-    saved_pass = auth_df.loc[auth_df['Key'] == 'password', 'Value'].values[0] if 'password' in auth_df['Key'].values else "1234"
-else:
-    saved_user, saved_pass = "admin", "1234"
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-if not st.session_state.authenticated:
-    st.title("🔒 Cheesy Delights - Login")
-    st.write("Please enter your username and password to access the application:")
-    
-    with st.form("login_form"):
-        entered_user = st.text_input("Username")
-        entered_pass = st.text_input("Password", type="password")
-        login_btn = st.form_submit_button("Login")
-        
-        if login_btn:
-            if entered_user == str(saved_user) and entered_pass == str(saved_pass):
-                st.session_state.authenticated = True
-                st.rerun()
-            else:
-                st.error("❌ Incorrect Username or Password! Please try again.")
-    st.stop()
 
 # Load or Initialize Settings
 if os.path.exists(SETTINGS_FILE):
@@ -86,10 +43,6 @@ with st.sidebar:
             "⚙️ Settings"
         ]
     )
-    st.markdown("---")
-    if st.button("🔒 Logout"):
-        st.session_state.authenticated = False
-        st.rerun()
 
 # ==========================================
 # DATA FRAMES INITIALIZATION
@@ -239,6 +192,7 @@ elif nav_option == "📈 Monthly & Yearly Reports":
         merged_rep["Cost"] = merged_rep["Sale"] * merged_rep["Purchase Price"]
         merged_rep["Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
         
+        # Safely parse dates
         merged_rep["Date_Parsed"] = pd.to_datetime(merged_rep["Date"], errors='coerce')
         merged_rep["Year"] = merged_rep["Date_Parsed"].dt.year
         merged_rep["Month"] = merged_rep["Date_Parsed"].dt.strftime("%Y-%m")
@@ -306,23 +260,8 @@ elif nav_option == "📈 Monthly & Yearly Reports":
 # SCREEN 5: ⚙️ SETTINGS
 # ==========================================
 else:
-    st.title("⚙️ Settings & Configuration")
+    st.title("⚙️ Settings & WhatsApp Configuration")
     
-    st.subheader("🔑 Change Username & Password")
-    with st.form("auth_form"):
-        new_username = st.text_input("New Username", value=saved_user)
-        new_password = st.text_input("New Password", value=saved_pass, type="password")
-        
-        if st.form_submit_button("Update Login Credentials"):
-            auth_save = pd.DataFrame({
-                "Key": ["username", "password"],
-                "Value": [new_username, new_password]
-            })
-            auth_save.to_csv(AUTH_FILE, index=False)
-            st.success("✅ Username and Password updated permanently!")
-
-    st.markdown("---")
-    st.subheader("💬 WhatsApp Contacts Configuration")
     with st.form("settings_form"):
         b1_name_in = st.text_input("Brother 1 Name", value=st.session_state.brother_1_name)
         b1_phone_in = st.text_input("Brother 1 WhatsApp (with country code, e.g. 92300...)", value=st.session_state.brother_1_phone)
@@ -332,7 +271,7 @@ else:
         b2_name_in = st.text_input("Brother 2 Name", value=st.session_state.brother_2_name)
         b2_phone_in = st.text_input("Brother 2 WhatsApp (with country code, e.g. 92300...)", value=st.session_state.brother_2_phone)
         
-        if st.form_submit_button("Save WhatsApp Settings"):
+        if st.form_submit_button("Save Settings"):
             st.session_state.brother_1_name = b1_name_in
             st.session_state.brother_1_phone = b1_phone_in
             st.session_state.brother_2_name = b2_name_in
@@ -343,4 +282,4 @@ else:
                 "Value": [b1_name_in, b1_phone_in, b2_name_in, b2_phone_in]
             })
             settings_save.to_csv(SETTINGS_FILE, index=False)
-            st.success("✅ WhatsApp settings saved permanently!")
+            st.success("✅ Settings saved permanently!")
