@@ -1,10 +1,12 @@
-from datetime import date
+from datetime import date, timedelta
 import os
 import urllib.parse
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Cheesy Delights | Complete Manager", layout="wide")
+st.set_page_config(
+    page_title="Cheesy Delights | Complete Manager", layout="wide"
+)
 
 # ==========================================
 # 🎨 CUSTOM CSS TO FIX SCROLLING & UI FOCUS
@@ -12,7 +14,6 @@ st.set_page_config(page_title="Cheesy Delights | Complete Manager", layout="wide
 st.markdown(
     """
     <style>
-        /* Prevent jarring page jumps on data edits */
         .stDataFrame, .stDataEditor {
             overflow-x: auto;
         }
@@ -135,30 +136,31 @@ with st.sidebar:
     st.rerun()
 
 # ==========================================
-# DATA FRAMES INITIALIZATION
+# DATA FRAMES INITIALIZATION (With Categories)
 # ==========================================
 if "prices_data" not in st.session_state:
   st.session_state.prices_data = pd.DataFrame([
       {
           "Item Name": "Zinger Burger",
+          "Category": "Burgers",
           "Purchase Price": 250.0,
           "Selling Price": 450.0,
       },
       {
           "Item Name": "French Fries (Large)",
+          "Category": "Fries",
           "Purchase Price": 80.0,
           "Selling Price": 180.0,
       },
   ])
 
 # ==========================================
-# SCREEN 1: 🏠 HOME SCREEN (With Profit/Loss & Expenses Summary)
+# SCREEN 1: 🏠 HOME SCREEN
 # ==========================================
 if nav_option == "🏠 Home Screen":
   st.title("🍕 Cheesy Delights - Home Dashboard")
   st.write(f"Welcome back, **{saved_admin_name}**! Here is your business overview:")
 
-  # Calculate Financial Summary if records exist
   total_rev = 0.0
   total_cost = 0.0
   total_exp = 0.0
@@ -182,7 +184,6 @@ if nav_option == "🏠 Home Screen":
   gross_profit = total_rev - total_cost
   net_profit_loss = gross_profit - total_exp
 
-  # Display Metrics on Home Screen
   m1, m2, m3, m4 = st.columns(4)
   m1.metric("Total Revenue", f"Rs. {total_rev:,.2f}")
   m2.metric("Gross Profit", f"Rs. {gross_profit:,.2f}")
@@ -204,16 +205,41 @@ if nav_option == "🏠 Home Screen":
     )
 
   st.markdown("---")
-  st.subheader("📦 Live Stock Overview")
 
+  # Low Stock Warning Banner
   if os.path.exists(INVENTORY_FILE):
     saved_inv = pd.read_csv(INVENTORY_FILE)
     latest_date = (
         saved_inv["Date"].max() if "Date" in saved_inv.columns else None
     )
     if latest_date:
-      st.info(f"Showing latest saved stock for date: {latest_date}")
       latest_df = saved_inv[saved_inv["Date"] == latest_date]
+      if (
+          "Actual" in latest_df.columns
+          and "Min Stock Limit" in latest_df.columns
+      ):
+        low_stock_items = latest_df[
+            latest_df["Actual"] <= latest_df["Min Stock Limit"]
+        ]
+        if not low_stock_items.empty:
+          st.error(
+              "⚠️ **Low Stock Alert!** Following items are running low and"
+              " need reordering:"
+          )
+          for _, row in low_stock_items.iterrows():
+            st.markdown(
+                f"- **{row['Item Name']}**: Current Stock = {row['Actual']}"
+                f" (Limit: {row['Min Stock Limit']})"
+            )
+        else:
+          st.success("✅ All live stock items have sufficient levels.")
+
+  st.markdown("---")
+  st.subheader("📦 Live Stock Overview")
+
+  if os.path.exists(INVENTORY_FILE):
+    if latest_date:
+      st.info(f"Showing latest saved stock for date: {latest_date}")
       st.dataframe(latest_df, use_container_width=True)
     else:
       st.dataframe(saved_inv, use_container_width=True)
@@ -224,7 +250,7 @@ if nav_option == "🏠 Home Screen":
     )
 
 # ==========================================
-# SCREEN 2: 📦 ALL INVENTORY & DAILY ENTRY
+# SCREEN 2: 📦 ALL INVENTORY & DAILY ENTRY (Smart Opening Stock)
 # ==========================================
 elif nav_option == "📦 All Inventory & Daily Entry":
   st.title("📦 Daily Inventory & Sales Entry")
@@ -237,32 +263,54 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   st.markdown("---")
 
-  default_inv = pd.DataFrame([
-      {
-          "Item Name": "Zinger Burger",
-          "Unit": "Pieces",
-          "Opening": 50,
-          "Additional": 10,
-          "Sale": 20,
-          "Discount": 2,
-          "Return": 1,
-          "Wastage": 1,
-          "Actual": 5,
-          "Min Stock Limit": 10,
-      },
-      {
-          "Item Name": "French Fries (Large)",
-          "Unit": "Portion",
-          "Opening": 40,
-          "Additional": 5,
-          "Sale": 25,
-          "Discount": 0,
-          "Return": 0,
-          "Wastage": 2,
-          "Actual": 18,
-          "Min Stock Limit": 15,
-      },
-  ])
+  # Smart Opening Stock logic: Fetch previous day's actual stock if available
+  default_rows = []
+  prev_date_str = str(selected_date - timedelta(days=1))
+
+  has_prev_data = False
+  if os.path.exists(INVENTORY_FILE):
+    past_inv = pd.read_csv(INVENTORY_FILE)
+    if not past_inv.empty and "Date" in past_inv.columns:
+      prev_day_records = past_inv[past_inv["Date"] == prev_date_str]
+      if not prev_day_records.empty:
+        has_prev_data = True
+
+  prices_master = st.session_state.prices_data
+
+  for _, p_row in prices_master.iterrows():
+    i_name = p_row["Item Name"]
+    i_cat = p_row.get("Category", "General")
+    opening_val = 50
+    min_limit = 10
+
+    if has_prev_data:
+      matched_item = prev_day_records[prev_day_records["Item Name"] == i_name]
+      if not matched_item.empty:
+        # Carry forward previous actual stock as today's opening stock
+        opening_val = int(matched_item.iloc[-1].get("Actual", 50))
+        min_limit = int(matched_item.iloc[-1].get("Min Stock Limit", 10))
+
+    default_rows.append({
+        "Item Name": i_name,
+        "Category": i_cat,
+        "Unit": "Pieces",
+        "Opening": opening_val,
+        "Additional": 0,
+        "Sale": 0,
+        "Discount": 0,
+        "Return": 0,
+        "Wastage": 0,
+        "Actual": opening_val,
+        "Min Stock Limit": min_limit,
+    })
+
+  default_inv = pd.DataFrame(default_rows)
+
+  if has_prev_data:
+    st.success(
+        f"💡 Opening stock automatically loaded from previous day"
+        f" ({prev_date_str}) closing stock!"
+    )
 
   edited_inventory = st.data_editor(
       default_inv, num_rows="dynamic", key="all_inv_box", use_container_width=True
@@ -278,7 +326,6 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     )
     df["Variance"] = df["Actual"] - df["Balance"]
 
-    # Save Button
     if st.button("💾 Save Today's Record"):
       if os.path.exists(INVENTORY_FILE):
         existing_df = pd.read_csv(INVENTORY_FILE)
@@ -350,12 +397,12 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       st.success("✅ All items have sufficient stock levels.")
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & EXPENSES
+# SCREEN 3: 🏷️ PRICING & EXPENSES (With Categories)
 # ==========================================
 elif nav_option == "🏷️ Pricing & Expenses":
   st.title("🏷️ Pricing & Daily Expenses Management")
 
-  st.subheader("🏷️ Purchase & Selling Prices Box")
+  st.subheader("🏷️ Purchase & Selling Prices Box (With Categories)")
   edited_prices = st.data_editor(
       st.session_state.prices_data,
       num_rows="dynamic",
@@ -392,15 +439,21 @@ elif nav_option == "🏷️ Pricing & Expenses":
     exp_updated.to_csv(EXPENSES_FILE, index=False)
     st.success("✅ Expenses saved permanently!")
 
+  if os.path.exists(EXPENSES_FILE):
+    exp_history = pd.read_csv(EXPENSES_FILE)
+    if not exp_history.empty and "Expense Reason" in exp_history.columns:
+      st.markdown("#### 📊 Expenses Breakdown Chart")
+      exp_chart_data = (
+          exp_history.groupby("Expense Reason")["Amount"].sum().reset_index()
+      )
+      st.bar_chart(exp_chart_data.set_index("Expense Reason"))
+
 # ==========================================
-# SCREEN 4: 📈 MONTHLY & YEARLY REPORTS
+# SCREEN 4: 📈 REPORTS
 # ==========================================
 elif nav_option == "📈 Monthly & Yearly Reports":
-  st.title("📈 Monthly & Yearly Sales / Profit Reports")
-  st.write(
-      "Analyze business revenue and profit over months and years based on saved"
-      " records:"
-  )
+  st.title("📈 Business Reports & Custom Date Range")
+  st.write("Analyze business revenue and profit with advanced filters:")
 
   if os.path.exists(INVENTORY_FILE):
     inv_records = pd.read_csv(INVENTORY_FILE)
@@ -419,7 +472,9 @@ elif nav_option == "📈 Monthly & Yearly Reports":
     merged_rep["Year"] = merged_rep["Date_Parsed"].dt.year
     merged_rep["Month"] = merged_rep["Date_Parsed"].dt.strftime("%Y-%m")
 
-    tab1, tab2 = st.tabs(["📅 Monthly Report", "📊 Yearly Report"])
+    tab1, tab2, tab3 = st.tabs(
+        ["📅 Monthly Report", "📊 Yearly Report", "🔍 Custom Date Filter"]
+    )
 
     with tab1:
       st.subheader("Monthly Sales & Profit Breakdown")
@@ -444,8 +499,36 @@ elif nav_option == "📈 Monthly & Yearly Reports":
         )
 
         st.dataframe(
-            month_data[["Date", "Item Name", "Sale", "Revenue", "Profit"]],
+            month_data[[
+                "Date",
+                "Item Name",
+                "Category",
+                "Sale",
+                "Revenue",
+                "Profit",
+            ]],
             use_container_width=True,
+        )
+
+        st.markdown("#### 📈 Visual Performance Chart")
+        chart_data = (
+            month_data.groupby("Item Name")[["Revenue", "Profit"]]
+            .sum()
+            .reset_index()
+        )
+        if not chart_data.empty:
+          st.bar_chart(chart_data.set_index("Item Name"))
+
+        @st.cache_data
+        def convert_df_to_csv(df):
+          return df.to_csv(index=False).encode("utf-8")
+
+        csv_data = convert_df_to_csv(month_data)
+        st.download_button(
+            label="📥 Download Monthly Report (Excel/CSV)",
+            data=csv_data,
+            file_name=f"Cheesy_Delights_Monthly_{selected_month}.csv",
+            mime="text/csv",
         )
       else:
         st.info("No valid month data available.")
@@ -473,24 +556,68 @@ elif nav_option == "📈 Monthly & Yearly Reports":
         )
 
         st.dataframe(
-            year_data[["Month", "Item Name", "Sale", "Revenue", "Profit"]],
+            year_data[[
+                "Month",
+                "Item Name",
+                "Category",
+                "Sale",
+                "Revenue",
+                "Profit",
+            ]],
             use_container_width=True,
         )
+
+        st.markdown("#### 📈 Yearly Trend Chart")
+        y_chart_data = (
+            year_data.groupby("Month")[["Revenue", "Profit"]].sum().reset_index()
+        )
+        if not y_chart_data.empty:
+          st.bar_chart(y_chart_data.set_index("Month"))
       else:
         st.info("No valid year data available.")
 
-    st.markdown("---")
+    with tab3:
+      st.subheader("🔍 Custom Date Range Filter")
+      d_col1, d_col2 = st.columns(2)
+      with d_col1:
+        start_d = st.date_input("Start Date", date.today())
+      with d_col2:
+        end_d = st.date_input("End Date", date.today())
 
-    # ==========================================
-    # 🗑️ DELETE RECORD SECTION (IN REPORTS)
-    # ==========================================
+      filtered_range_data = merged_rep[
+          (merged_rep["Date_Parsed"].dt.date >= start_d)
+          & (merged_rep["Date_Parsed"].dt.date <= end_d)
+      ]
+
+      if not filtered_range_data.empty:
+        r_rev = filtered_range_data["Revenue"].sum()
+        r_prof = filtered_range_data["Profit"].sum()
+
+        rc1, rc2 = st.columns(2)
+        rc1.metric("Revenue in Range", f"Rs. {r_rev:,.2f}")
+        rc2.metric("Gross Profit in Range", f"Rs. {r_prof:,.2f}")
+
+        st.dataframe(
+            filtered_range_data[[
+                "Date",
+                "Item Name",
+                "Category",
+                "Sale",
+                "Revenue",
+                "Profit",
+            ]],
+            use_container_width=True,
+        )
+      else:
+        st.info("No records found in this date range.")
+
+    st.markdown("---")
     st.subheader("🗑️ Delete Saved Date Record")
     available_dates = sorted(inv_records["Date"].dropna().unique(), reverse=True)
     if len(available_dates) > 0:
       date_to_delete = st.selectbox(
           "Select Date to Delete", available_dates, key="del_date_report"
       )
-
       if st.button("🗑️ Delete Selected Date Record"):
         new_saved_df = inv_records[inv_records["Date"] != date_to_delete]
         new_saved_df.to_csv(INVENTORY_FILE, index=False)
@@ -500,7 +627,6 @@ elif nav_option == "📈 Monthly & Yearly Reports":
         st.rerun()
     else:
       st.info("No records available to delete.")
-
   else:
     st.warning("⚠️ No saved inventory records found yet!")
 
@@ -525,6 +651,18 @@ else:
       })
       auth_save.to_csv(AUTH_FILE, index=False)
       st.success("✅ Admin credentials updated permanently! Please reload.")
+
+  st.markdown("---")
+  st.subheader("📥 Data Backup Feature")
+  st.write("Download your complete inventory records as backup:")
+  if os.path.exists(INVENTORY_FILE):
+    with open(INVENTORY_FILE, "rb") as f:
+      st.download_button(
+          label="💾 Download Complete Inventory Backup (.csv)",
+          data=f,
+          file_name="inventory_backup.csv",
+          mime="text/csv",
+      )
 
   st.markdown("---")
   st.subheader("💬 WhatsApp Contacts Configuration")
