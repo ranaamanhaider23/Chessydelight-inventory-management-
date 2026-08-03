@@ -136,7 +136,7 @@ with st.sidebar:
     st.rerun()
 
 # ==========================================
-# DATA FRAMES INITIALIZATION (With Categories)
+# DATA FRAMES INITIALIZATION
 # ==========================================
 if "prices_data" not in st.session_state:
   st.session_state.prices_data = pd.DataFrame([
@@ -206,7 +206,6 @@ if nav_option == "🏠 Home Screen":
 
   st.markdown("---")
 
-  # Low Stock Warning Banner
   if os.path.exists(INVENTORY_FILE):
     saved_inv = pd.read_csv(INVENTORY_FILE)
     latest_date = (
@@ -244,13 +243,10 @@ if nav_option == "🏠 Home Screen":
     else:
       st.dataframe(saved_inv, use_container_width=True)
   else:
-    st.info(
-        "No saved inventory data found yet. Go to 'All Inventory & Daily Entry'"
-        " to save records."
-    )
+    st.info("No saved inventory data found yet.")
 
 # ==========================================
-# SCREEN 2: 📦 ALL INVENTORY & DAILY ENTRY (Smart Opening Stock)
+# SCREEN 2: 📦 ALL INVENTORY & DAILY ENTRY
 # ==========================================
 elif nav_option == "📦 All Inventory & Daily Entry":
   st.title("📦 Daily Inventory & Sales Entry")
@@ -263,7 +259,6 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   st.markdown("---")
 
-  # Smart Opening Stock logic: Fetch previous day's actual stock if available
   default_rows = []
   prev_date_str = str(selected_date - timedelta(days=1))
 
@@ -286,7 +281,6 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     if has_prev_data:
       matched_item = prev_day_records[prev_day_records["Item Name"] == i_name]
       if not matched_item.empty:
-        # Carry forward previous actual stock as today's opening stock
         opening_val = int(matched_item.iloc[-1].get("Actual", 50))
         min_limit = int(matched_item.iloc[-1].get("Min Stock Limit", 10))
 
@@ -307,10 +301,7 @@ elif nav_option == "📦 All Inventory & Daily Entry":
   default_inv = pd.DataFrame(default_rows)
 
   if has_prev_data:
-    st.success(
-        f"💡 Opening stock automatically loaded from previous day"
-        f" ({prev_date_str}) closing stock!"
-    )
+    st.success(f"💡 Opening stock loaded from previous day ({prev_date_str})!")
 
   edited_inventory = st.data_editor(
       default_inv, num_rows="dynamic", key="all_inv_box", use_container_width=True
@@ -397,12 +388,12 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       st.success("✅ All items have sufficient stock levels.")
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & EXPENSES (With Categories)
+# SCREEN 3: 🏷️ PRICING & EXPENSES
 # ==========================================
 elif nav_option == "🏷️ Pricing & Expenses":
   st.title("🏷️ Pricing & Daily Expenses Management")
 
-  st.subheader("🏷️ Purchase & Selling Prices Box (With Categories)")
+  st.subheader("🏷️ Purchase & Selling Prices Box")
   edited_prices = st.data_editor(
       st.session_state.prices_data,
       num_rows="dynamic",
@@ -449,7 +440,7 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: 📈 REPORTS
+# SCREEN 4: 📈 REPORTS (Safe with Missing Columns)
 # ==========================================
 elif nav_option == "📈 Monthly & Yearly Reports":
   st.title("📈 Business Reports & Custom Date Range")
@@ -457,11 +448,23 @@ elif nav_option == "📈 Monthly & Yearly Reports":
 
   if os.path.exists(INVENTORY_FILE):
     inv_records = pd.read_csv(INVENTORY_FILE)
+
+    # Ensure Category column exists safely even in old data
+    if "Category" not in inv_records.columns:
+      inv_records["Category"] = "General"
+
     prices_df = st.session_state.prices_data
 
     merged_rep = pd.merge(
         inv_records, prices_df, on="Item Name", how="left"
     ).fillna(0)
+    # Fix Category overlap if both dataframes had it
+    if "Category_x" in merged_rep.columns:
+      merged_rep["Category"] = merged_rep["Category_x"]
+      merged_rep.drop(
+          columns=["Category_x", "Category_y"], errors="ignore", inplace=True
+      )
+
     merged_rep["Revenue"] = merged_rep["Sale"] * merged_rep["Selling Price"]
     merged_rep["Cost"] = merged_rep["Sale"] * merged_rep["Purchase Price"]
     merged_rep["Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
@@ -498,17 +501,19 @@ elif nav_option == "📈 Monthly & Yearly Reports":
             value=f"Rs. {m_profit:,.2f}",
         )
 
-        st.dataframe(
-            month_data[[
+        show_cols = [
+            c
+            for c in [
                 "Date",
                 "Item Name",
                 "Category",
                 "Sale",
                 "Revenue",
                 "Profit",
-            ]],
-            use_container_width=True,
-        )
+            ]
+            if c in month_data.columns
+        ]
+        st.dataframe(month_data[show_cols], use_container_width=True)
 
         st.markdown("#### 📈 Visual Performance Chart")
         chart_data = (
@@ -555,17 +560,19 @@ elif nav_option == "📈 Monthly & Yearly Reports":
             value=f"Rs. {y_profit:,.2f}",
         )
 
-        st.dataframe(
-            year_data[[
+        show_y_cols = [
+            c
+            for c in [
                 "Month",
                 "Item Name",
                 "Category",
                 "Sale",
                 "Revenue",
                 "Profit",
-            ]],
-            use_container_width=True,
-        )
+            ]
+            if c in year_data.columns
+        ]
+        st.dataframe(year_data[show_y_cols], use_container_width=True)
 
         st.markdown("#### 📈 Yearly Trend Chart")
         y_chart_data = (
@@ -597,17 +604,19 @@ elif nav_option == "📈 Monthly & Yearly Reports":
         rc1.metric("Revenue in Range", f"Rs. {r_rev:,.2f}")
         rc2.metric("Gross Profit in Range", f"Rs. {r_prof:,.2f}")
 
-        st.dataframe(
-            filtered_range_data[[
+        show_r_cols = [
+            c
+            for c in [
                 "Date",
                 "Item Name",
                 "Category",
                 "Sale",
                 "Revenue",
                 "Profit",
-            ]],
-            use_container_width=True,
-        )
+            ]
+            if c in filtered_range_data.columns
+        ]
+        st.dataframe(filtered_range_data[show_r_cols], use_container_width=True)
       else:
         st.info("No records found in this date range.")
 
