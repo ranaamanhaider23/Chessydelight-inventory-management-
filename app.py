@@ -192,48 +192,39 @@ elif nav_option == "📈 Monthly & Yearly Reports":
         merged_rep["Cost"] = merged_rep["Sale"] * merged_rep["Purchase Price"]
         merged_rep["Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
         
-        # Safely parse dates
-        merged_rep["Date_Parsed"] = pd.to_datetime(merged_rep["Date"], errors='coerce')
-        merged_rep["Year"] = merged_rep["Date_Parsed"].dt.year
-        merged_rep["Month"] = merged_rep["Date_Parsed"].dt.strftime("%Y-%m")
+        merged_rep["Date"] = pd.to_datetime(merged_rep["Date"])
+        merged_rep["Year"] = merged_rep["Date"].dt.year
+        merged_rep["Month"] = merged_rep["Date"].dt.strftime("%Y-%m")
         
         tab1, tab2 = st.tabs(["📅 Monthly Report", "📊 Yearly Report"])
         
         with tab1:
             st.subheader("Monthly Sales & Profit Breakdown")
-            valid_months = merged_rep["Month"].dropna().unique()
-            if len(valid_months) > 0:
-                selected_month = st.selectbox("Select Month", sorted(valid_months, reverse=True))
-                month_data = merged_rep[merged_rep["Month"] == selected_month]
-                
-                m_revenue = month_data["Revenue"].sum()
-                m_profit = month_data["Profit"].sum()
-                
-                c1, c2 = st.columns(2)
-                c1.metric(label=f"Total Revenue ({selected_month})", value=f"Rs. {m_revenue:,.2f}")
-                c2.metric(label=f"Total Gross Profit ({selected_month})", value=f"Rs. {m_profit:,.2f}")
-                
-                st.dataframe(month_data[["Date", "Item Name", "Sale", "Revenue", "Profit"]], use_container_width=True)
-            else:
-                st.info("No valid month data available.")
+            selected_month = st.selectbox("Select Month", sorted(merged_rep["Month"].unique(), reverse=True))
+            month_data = merged_rep[merged_rep["Month"] == selected_month]
+            
+            m_revenue = month_data["Revenue"].sum()
+            m_profit = month_data["Profit"].sum()
+            
+            c1, c2 = st.columns(2)
+            c1.metric(label=f"Total Revenue ({selected_month})", value=f"Rs. {m_revenue:,.2f}")
+            c2.metric(label=f"Total Gross Profit ({selected_month})", value=f"Rs. {m_profit:,.2f}")
+            
+            st.dataframe(month_data[["Date", "Item Name", "Sale", "Revenue", "Profit"]], use_container_width=True)
             
         with tab2:
             st.subheader("Yearly Sales & Profit Breakdown")
-            valid_years = merged_rep["Year"].dropna().unique()
-            if len(valid_years) > 0:
-                selected_year = st.selectbox("Select Year", sorted(valid_years, reverse=True))
-                year_data = merged_rep[merged_rep["Year"] == selected_year]
-                
-                y_revenue = year_data["Revenue"].sum()
-                y_profit = year_data["Profit"].sum()
-                
-                y1, y2 = st.columns(2)
-                y1.metric(label=f"Total Revenue ({selected_year})", value=f"Rs. {y_revenue:,.2f}")
-                y2.metric(label=f"Total Gross Profit ({selected_year})", value=f"Rs. {y_profit:,.2f}")
-                
-                st.dataframe(year_data[["Month", "Item Name", "Sale", "Revenue", "Profit"]], use_container_width=True)
-            else:
-                st.info("No valid year data available.")
+            selected_year = st.selectbox("Select Year", sorted(merged_rep["Year"].unique(), reverse=True))
+            year_data = merged_rep[merged_rep["Year"] == selected_year]
+            
+            y_revenue = year_data["Revenue"].sum()
+            y_profit = year_data["Profit"].sum()
+            
+            y1, y2 = st.columns(2)
+            y1.metric(label=f"Total Revenue ({selected_year})", value=f"Rs. {y_revenue:,.2f}")
+            y2.metric(label=f"Total Gross Profit ({selected_year})", value=f"Rs. {y_profit:,.2f}")
+            
+            st.dataframe(year_data[["Month", "Item Name", "Sale", "Revenue", "Profit"]], use_container_width=True)
             
         st.markdown("---")
         
@@ -241,17 +232,16 @@ elif nav_option == "📈 Monthly & Yearly Reports":
         # 🗑️ DELETE RECORD SECTION (IN REPORTS)
         # ==========================================
         st.subheader("🗑️ Delete Saved Date Record")
-        available_dates = sorted(inv_records["Date"].dropna().unique(), reverse=True)
-        if len(available_dates) > 0:
-            date_to_delete = st.selectbox("Select Date to Delete", available_dates, key="del_date_report")
-            
-            if st.button("🗑️ Delete Selected Date Record"):
-                new_saved_df = inv_records[inv_records["Date"] != date_to_delete]
-                new_saved_df.to_csv(INVENTORY_FILE, index=False)
-                st.success(f"✅ Record for date {date_to_delete} has been deleted successfully!")
-                st.rerun()
-        else:
-            st.info("No records available to delete.")
+        available_dates = sorted(inv_records["Date"].dt.strftime("%Y-%m-%d").unique(), reverse=True)
+        date_to_delete = st.selectbox("Select Date to Delete", available_dates, key="del_date_report")
+        
+        if st.button("🗑️ Delete Selected Date Record"):
+            inv_records["Date_Str"] = inv_records["Date"].dt.strftime("%Y-%m-%d")
+            new_saved_df = inv_records[inv_records["Date_Str"] != date_to_delete]
+            new_saved_df = new_saved_df.drop(columns=["Date_Str", "Revenue", "Cost", "Profit", "Year", "Month"], errors="ignore")
+            new_saved_df.to_csv(INVENTORY_FILE, index=False)
+            st.success(f"✅ Record for date {date_to_delete} has been deleted successfully!")
+            st.rerun()
             
     else:
         st.warning("⚠️ No saved inventory records found yet!")
