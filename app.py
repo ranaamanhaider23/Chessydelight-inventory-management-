@@ -114,7 +114,7 @@ if "brother_2_phone" not in st.session_state:
   st.session_state.brother_2_phone = str(b2_phone_def)
 
 # ==========================================
-# 🧭 SIDEBAR NAVIGATION & QUICK POS CALCULATOR
+# 🧭 SIDEBAR NAVIGATION
 # ==========================================
 with st.sidebar:
   st.markdown(f"### 👤 Welcome, {saved_admin_name}")
@@ -126,31 +126,11 @@ with st.sidebar:
           "🏠 Home Screen",
           "📦 All Inventory & Daily Entry",
           "🏷️ Pricing & Expenses",
+          "⚡ Quick Sales (POS)",
           "📈 Monthly & Yearly Reports",
           "⚙️ Settings",
       ],
   )
-
-  st.markdown("---")
-  st.markdown("### ⚡ Quick Sales Calculator (POS)")
-  st.write("Calculate billing for items instantly:")
-
-  with st.form("sidebar_pos_form"):
-    pos_item_name = st.text_input("Item Name (e.g. Pizza, Burger)", value="Pizza")
-    pos_price = st.number_input(
-        "Total Price (Per Unit / Fixed)", min_value=0.0, value=450.0, step=50.0
-    )
-    pos_qty = st.number_input(
-        "Quantity Sold", min_value=1, value=1, step=1
-    )
-    calc_button = st.form_submit_button("Calculate Total")
-
-    if calc_button:
-      total_amt = pos_price * pos_qty
-      st.success(
-          f"🛒 **{pos_item_name}**\n- Qty: {pos_qty}\n- Total Amount: Rs."
-          f" {total_amt:,.2f}"
-      )
 
   st.markdown("---")
   if st.button("🔒 Logout"):
@@ -500,7 +480,49 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: 📈 REPORTS
+# SCREEN 4: ⚡ QUICK SALES (POS)
+# ==========================================
+elif nav_option == "⚡ Quick Sales (POS)":
+  st.title("⚡ Quick Sales Calculator (POS)")
+  st.write(
+      "Aap yahan apne restaurant items (jaise Pizza, Burger, Sandwich) ka naam,"
+      " total price aur quantity likh kar foran total amount calculate kar"
+      " sakte hain:"
+  )
+
+  with st.form("pos_main_form"):
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+      pos_item_name = st.text_input(
+          "Item Name (e.g. Pizza, Burger, Sandwich)", value="Pizza"
+      )
+      pos_price = st.number_input(
+          "Total Price (Per Unit / Fixed)", min_value=0.0, value=450.0, step=50.0
+      )
+    with col_p2:
+      pos_qty = st.number_input(
+          "Quantity Sold (Kitna sale ho ga/raha hai)",
+          min_value=1,
+          value=1,
+          step=1,
+      )
+
+    calc_button = st.form_submit_button("Calculate Total Amount")
+
+    if calc_button:
+      total_amt = pos_price * pos_qty
+      st.markdown("---")
+      st.success("### 🛒 Bill Calculation Result:")
+      st.markdown(f"**Item Name:** {pos_item_name}")
+      st.markdown(f"**Price per Unit:** Rs. {pos_price:,.2f}")
+      st.markdown(f"**Quantity Sold:** {pos_qty}")
+      st.markdown(
+          f"### 💰 **Total Amount:** Rs. {total_amt:,.2f}",
+          unsafe_allow_html=True,
+      )
+
+# ==========================================
+# SCREEN 5: 📈 REPORTS
 # ==========================================
 elif nav_option == "📈 Monthly & Yearly Reports":
   st.title("📈 Business Reports & Custom Date Range")
@@ -698,7 +720,7 @@ elif nav_option == "📈 Monthly & Yearly Reports":
     st.warning("⚠️ No saved inventory records found yet!")
 
 # ==========================================
-# SCREEN 5: ⚙️ SETTINGS
+# SCREEN 6: ⚙️ SETTINGS
 # ==========================================
 else:
   st.title("⚙️ Settings & Configuration")
