@@ -434,17 +434,24 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       st.success("✅ All items have sufficient stock levels.")
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & EXPENSES
+# SCREEN 3: 🏷️ PRICING & EXPENSES (REALTIME REFRESH FIX)
 # ==========================================
 elif nav_option == "🏷️ Pricing & Expenses":
   st.title("🏷️ Pricing & Daily Expenses Management")
 
   st.subheader("🏷️ Purchase & Selling Prices Box")
+  st.write("Aap yahan price change karein, amount foran update ho jaye gi:")
+
   edited_prices = st.data_editor(
       st.session_state.prices_data,
       num_rows="dynamic",
       key="price_box",
       use_container_width=True,
+      on_change=lambda: st.session_state.update(
+          {"prices_data": st.session_state.price_box}
+      )
+      if "price_box" in st.session_state
+      else None,
   )
   st.session_state.prices_data = edited_prices
 
@@ -486,7 +493,7 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: ⚡ QUICK SALES (POS) - STABLE ROW ADDER
+# SCREEN 4: ⚡ QUICK SALES (POS) - WITH TOTAL ITEMS SOLD COUNTER
 # ==========================================
 elif nav_option == "⚡ Quick Sales (POS)":
   st.title("⚡ Quick Sales Calculator (POS)")
@@ -515,6 +522,7 @@ elif nav_option == "⚡ Quick Sales (POS)":
 
   updated_rows = []
   grand_total = 0.0
+  total_items_sold = 0  # Counter for total quantity sold
 
   st.markdown("---")
   for i, row in enumerate(st.session_state.pos_rows):
@@ -542,6 +550,7 @@ elif nav_option == "⚡ Quick Sales (POS)":
 
     row_total = i_qty * i_price
     grand_total += row_total
+    total_items_sold += i_qty  # Add to total items sold counter
 
     with c4:
       st.write("Total")
@@ -555,7 +564,10 @@ elif nav_option == "⚡ Quick Sales (POS)":
     })
     st.markdown("---")
 
-  st.markdown(f"### 💰 **Grand Total Amount:** Rs. {grand_total:,.2f}")
+  # Summary Metrics Box for Quick Sales
+  col_m1, col_m2 = st.columns(2)
+  col_m1.metric("📦 Total Items Sold (Quantity)", f"{total_items_sold} Units")
+  col_m2.metric("💰 Grand Total Amount", f"Rs. {grand_total:,.2f}")
 
   if st.button("💾 Save Today's POS Sales"):
     pos_df = pd.DataFrame(updated_rows)
