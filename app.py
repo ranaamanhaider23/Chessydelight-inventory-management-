@@ -114,7 +114,7 @@ if "brother_2_phone" not in st.session_state:
   st.session_state.brother_2_phone = str(b2_phone_def)
 
 # ==========================================
-# 🧭 SIDEBAR NAVIGATION
+# 🧭 SIDEBAR NAVIGATION & QUICK POS CALCULATOR
 # ==========================================
 with st.sidebar:
   st.markdown(f"### 👤 Welcome, {saved_admin_name}")
@@ -130,13 +130,35 @@ with st.sidebar:
           "⚙️ Settings",
       ],
   )
+
+  st.markdown("---")
+  st.markdown("### ⚡ Quick Sales Calculator (POS)")
+  st.write("Calculate billing for items instantly:")
+
+  with st.form("sidebar_pos_form"):
+    pos_item_name = st.text_input("Item Name (e.g. Pizza, Burger)", value="Pizza")
+    pos_price = st.number_input(
+        "Total Price (Per Unit / Fixed)", min_value=0.0, value=450.0, step=50.0
+    )
+    pos_qty = st.number_input(
+        "Quantity Sold", min_value=1, value=1, step=1
+    )
+    calc_button = st.form_submit_button("Calculate Total")
+
+    if calc_button:
+      total_amt = pos_price * pos_qty
+      st.success(
+          f"🛒 **{pos_item_name}**\n- Qty: {pos_qty}\n- Total Amount: Rs."
+          f" {total_amt:,.2f}"
+      )
+
   st.markdown("---")
   if st.button("🔒 Logout"):
     st.session_state.authenticated = False
     st.rerun()
 
 # ==========================================
-# DATA FRAMES INITIALIZATION
+# DATA FRAMES INITIALIZATION (Independent)
 # ==========================================
 if "prices_data" not in st.session_state:
   st.session_state.prices_data = pd.DataFrame([
@@ -151,6 +173,28 @@ if "prices_data" not in st.session_state:
           "Category": "Fries",
           "Purchase Price": 80.0,
           "Selling Price": 180.0,
+      },
+  ])
+
+if "inventory_master_data" not in st.session_state:
+  st.session_state.inventory_master_data = pd.DataFrame([
+      {
+          "Item Name": "Zinger Burger",
+          "Category": "Burgers",
+          "Unit": "Pieces",
+          "Min Stock Limit": 10,
+      },
+      {
+          "Item Name": "French Fries (Large)",
+          "Category": "Fries",
+          "Unit": "Portion",
+          "Min Stock Limit": 15,
+      },
+      {
+          "Item Name": "Onion",
+          "Category": "Vegetables",
+          "Unit": "Kg",
+          "Min Stock Limit": 5,
       },
   ])
 
@@ -251,11 +295,27 @@ if nav_option == "🏠 Home Screen":
 elif nav_option == "📦 All Inventory & Daily Entry":
   st.title("📦 Daily Inventory & Sales Entry")
 
-  col1, col2 = st.columns(2)
-  with col1:
-    selected_date = st.date_input("Select Date", date.today())
-  with col2:
-    shift = st.selectbox("Select Shift", ["Morning", "Evening", "Full Day"])
+  with st.form("inventory_date_form"):
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+      selected_date = st.date_input("Select Date", date.today())
+    with col_f2:
+      shift = st.selectbox("Select Shift", ["Morning", "Evening", "Full Day"])
+    with col_f3:
+      st.write("")
+      st.write("")
+      load_form_btn = st.form_submit_button("Load Date Entry Form")
+
+  st.markdown("---")
+  st.subheader("🛠️ Manage Inventory Item Master List")
+  with st.expander("Click here to add/edit items appearing in Daily Entry"):
+    edited_inv_master = st.data_editor(
+        st.session_state.inventory_master_data,
+        num_rows="dynamic",
+        key="inv_master_box",
+        use_container_width=True,
+    )
+    st.session_state.inventory_master_data = edited_inv_master
 
   st.markdown("---")
 
@@ -270,24 +330,24 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       if not prev_day_records.empty:
         has_prev_data = True
 
-  prices_master = st.session_state.prices_data
+  inv_master = st.session_state.inventory_master_data
 
-  for _, p_row in prices_master.iterrows():
+  for _, p_row in inv_master.iterrows():
     i_name = p_row["Item Name"]
     i_cat = p_row.get("Category", "General")
+    i_unit = p_row.get("Unit", "Pieces")
+    min_limit = int(p_row.get("Min Stock Limit", 10))
     opening_val = 50
-    min_limit = 10
 
     if has_prev_data:
       matched_item = prev_day_records[prev_day_records["Item Name"] == i_name]
       if not matched_item.empty:
         opening_val = int(matched_item.iloc[-1].get("Actual", 50))
-        min_limit = int(matched_item.iloc[-1].get("Min Stock Limit", 10))
 
     default_rows.append({
         "Item Name": i_name,
         "Category": i_cat,
-        "Unit": "Pieces",
+        "Unit": i_unit,
         "Opening": opening_val,
         "Additional": 0,
         "Sale": 0,
@@ -440,7 +500,7 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: 📈 REPORTS (Safe with Missing Columns)
+# SCREEN 4: 📈 REPORTS
 # ==========================================
 elif nav_option == "📈 Monthly & Yearly Reports":
   st.title("📈 Business Reports & Custom Date Range")
@@ -449,7 +509,6 @@ elif nav_option == "📈 Monthly & Yearly Reports":
   if os.path.exists(INVENTORY_FILE):
     inv_records = pd.read_csv(INVENTORY_FILE)
 
-    # Ensure Category column exists safely even in old data
     if "Category" not in inv_records.columns:
       inv_records["Category"] = "General"
 
@@ -458,7 +517,6 @@ elif nav_option == "📈 Monthly & Yearly Reports":
     merged_rep = pd.merge(
         inv_records, prices_df, on="Item Name", how="left"
     ).fillna(0)
-    # Fix Category overlap if both dataframes had it
     if "Category_x" in merged_rep.columns:
       merged_rep["Category"] = merged_rep["Category_x"]
       merged_rep.drop(
