@@ -434,28 +434,10 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       st.success("✅ All items have sufficient stock levels.")
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & EXPENSES (REALTIME REFRESH FIX)
+# SCREEN 3: 🏷️ EXPENSES MANAGEMENT (PURCHASE/SELL REMOVED)
 # ==========================================
 elif nav_option == "🏷️ Pricing & Expenses":
-  st.title("🏷️ Pricing & Daily Expenses Management")
-
-  st.subheader("🏷️ Purchase & Selling Prices Box")
-  st.write("Aap yahan price change karein, amount foran update ho jaye gi:")
-
-  edited_prices = st.data_editor(
-      st.session_state.prices_data,
-      num_rows="dynamic",
-      key="price_box",
-      use_container_width=True,
-      on_change=lambda: st.session_state.update(
-          {"prices_data": st.session_state.price_box}
-      )
-      if "price_box" in st.session_state
-      else None,
-  )
-  st.session_state.prices_data = edited_prices
-
-  st.markdown("---")
+  st.title("💸 Daily Expenses Management")
 
   st.subheader("💸 Daily Expenses Box")
   default_expenses = pd.DataFrame([{
@@ -493,94 +475,77 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: ⚡ QUICK SALES (POS) - WITH TOTAL ITEMS SOLD COUNTER
+# SCREEN 4: ⚡ QUICK SALES (POS) - TABLE EDITOR STYLE WITH QUANTITY & REMAINING STOCK
 # ==========================================
 elif nav_option == "⚡ Quick Sales (POS)":
   st.title("⚡ Quick Sales Calculator (POS)")
   st.write(
-      "Aap yahan items add karein, quantity aur price likhein, aur foran"
-      " calculation dekhein:"
+      "Add and edit items like the inventory box. Enter the quantity sold and"
+      " remaining stock, and totals will calculate automatically:"
   )
 
   pos_date = st.date_input(
       "Select Sale Date", date.today(), key="pos_date_picker"
   )
 
-  if "pos_rows" not in st.session_state:
-    st.session_state.pos_rows = [{
-        "Item Name": "Zinger Burger",
-        "Quantity": 1,
-        "Price Per Unit": 450.0,
-    }]
+  if "pos_df_state" not in st.session_state:
+    st.session_state.pos_df_state = pd.DataFrame([
+        {
+            "Item Name": "Zinger Burger",
+            "Quantity Sold": 1,
+            "Stock Remaining": 15,
+            "Price Per Unit": 450.0,
+        },
+        {
+            "Item Name": "French Fries (Large)",
+            "Quantity Sold": 2,
+            "Stock Remaining": 20,
+            "Price Per Unit": 180.0,
+        },
+    ])
 
-  # Add Item Button
-  if st.button("➕ Add Another Item"):
-    st.session_state.pos_rows.append(
-        {"Item Name": "Item", "Quantity": 1, "Price Per Unit": 100.0}
-    )
-    st.rerun()
+  edited_pos_df = st.data_editor(
+      st.session_state.pos_df_state,
+      num_rows="dynamic",
+      key="pos_table_editor",
+      use_container_width=True,
+  )
+  st.session_state.pos_df_state = edited_pos_df
 
-  updated_rows = []
-  grand_total = 0.0
-  total_items_sold = 0  # Counter for total quantity sold
+  if not edited_pos_df.empty:
+    df_pos = edited_pos_df.copy()
+    df_pos["Quantity Sold"] = pd.to_numeric(
+        df_pos["Quantity Sold"], errors="coerce"
+    ).fillna(0)
+    df_pos["Stock Remaining"] = pd.to_numeric(
+        df_pos["Stock Remaining"], errors="coerce"
+    ).fillna(0)
+    df_pos["Price Per Unit"] = pd.to_numeric(
+        df_pos["Price Per Unit"], errors="coerce"
+    ).fillna(0.0)
+    df_pos["Total Amount"] = df_pos["Quantity Sold"] * df_pos["Price Per Unit"]
 
-  st.markdown("---")
-  for i, row in enumerate(st.session_state.pos_rows):
-    c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
-    with c1:
-      i_name = st.text_input(
-          f"Item Name {i+1}",
-          value=row["Item Name"],
-          key=f"pos_name_{i}",
-      )
-    with c2:
-      i_qty = st.number_input(
-          f"Quantity {i+1}",
-          min_value=1,
-          value=int(row["Quantity"]),
-          key=f"pos_qty_{i}",
-      )
-    with c3:
-      i_price = st.number_input(
-          f"Price per Unit {i+1}",
-          min_value=0.0,
-          value=float(row["Price Per Unit"]),
-          key=f"pos_price_{i}",
-      )
+    total_items_sold = int(df_pos["Quantity Sold"].sum())
+    grand_total = float(df_pos["Total Amount"].sum())
 
-    row_total = i_qty * i_price
-    grand_total += row_total
-    total_items_sold += i_qty  # Add to total items sold counter
-
-    with c4:
-      st.write("Total")
-      st.write(f"**Rs. {row_total:,.2f}**")
-
-    updated_rows.append({
-        "Item Name": i_name,
-        "Quantity": i_qty,
-        "Price Per Unit": i_price,
-        "Total Amount": row_total,
-    })
     st.markdown("---")
+    col_m1, col_m2 = st.columns(2)
+    col_m1.metric("📦 Total Items Sold (Quantity)", f"{total_items_sold} Units")
+    col_m2.metric("💰 Grand Total Amount", f"Rs. {grand_total:,.2f}")
 
-  # Summary Metrics Box for Quick Sales
-  col_m1, col_m2 = st.columns(2)
-  col_m1.metric("📦 Total Items Sold (Quantity)", f"{total_items_sold} Units")
-  col_m2.metric("💰 Grand Total Amount", f"Rs. {grand_total:,.2f}")
+    st.markdown("#### 📊 POS Calculated Summary Preview")
+    st.dataframe(df_pos, use_container_width=True)
 
-  if st.button("💾 Save Today's POS Sales"):
-    pos_df = pd.DataFrame(updated_rows)
-    pos_df["Date"] = str(pos_date)
-
-    if os.path.exists(POS_FILE):
-      existing_pos = pd.read_csv(POS_FILE)
-      existing_pos = existing_pos[existing_pos["Date"] != str(pos_date)]
-      updated_pos = pd.concat([existing_pos, pos_df], ignore_index=True)
-    else:
-      updated_pos = pos_df
-    updated_pos.to_csv(POS_FILE, index=False)
-    st.success("✅ POS sales saved successfully!")
+    if st.button("💾 Save Today's POS Sales"):
+      df_pos["Date"] = str(pos_date)
+      if os.path.exists(POS_FILE):
+        existing_pos = pd.read_csv(POS_FILE)
+        existing_pos = existing_pos[existing_pos["Date"] != str(pos_date)]
+        updated_pos = pd.concat([existing_pos, df_pos], ignore_index=True)
+      else:
+        updated_pos = df_pos
+      updated_pos.to_csv(POS_FILE, index=False)
+      st.success("✅ POS sales saved successfully!")
 
   if os.path.exists(POS_FILE):
     st.markdown("---")
