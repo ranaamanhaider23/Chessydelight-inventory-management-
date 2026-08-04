@@ -480,46 +480,43 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: ⚡ QUICK SALES (POS)
+# SCREEN 4: ⚡ QUICK SALES (POS) - TABLE BASED
 # ==========================================
 elif nav_option == "⚡ Quick Sales (POS)":
   st.title("⚡ Quick Sales Calculator (POS)")
   st.write(
-      "Aap yahan apne restaurant items (jaise Pizza, Burger, Sandwich) ka naam,"
-      " total price aur quantity likh kar foran total amount calculate kar"
-      " sakte hain:"
+      "Aap yahan aik sath kai items add kar sakte hain, quantity aur price"
+      " enter karein, aur system khud ba khud total amount calculate kar ke"
+      " dega:"
   )
 
-  with st.form("pos_main_form"):
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-      pos_item_name = st.text_input(
-          "Item Name (e.g. Pizza, Burger, Sandwich)", value="Pizza"
-      )
-      pos_price = st.number_input(
-          "Total Price (Per Unit / Fixed)", min_value=0.0, value=450.0, step=50.0
-      )
-    with col_p2:
-      pos_qty = st.number_input(
-          "Quantity Sold (Kitna sale ho ga/raha hai)",
-          min_value=1,
-          value=1,
-          step=1,
-      )
+  # Default sample items for POS table
+  if "pos_items_data" not in st.session_state:
+    st.session_state.pos_items_data = pd.DataFrame([
+        {"Item Name": "Zinger Burger", "Quantity": 2, "Price Per Unit": 450.0},
+        {"Item Name": "French Fries", "Quantity": 1, "Price Per Unit": 180.0},
+    ])
 
-    calc_button = st.form_submit_button("Calculate Total Amount")
+  edited_pos_df = st.data_editor(
+      st.session_state.pos_items_data,
+      num_rows="dynamic",
+      key="pos_table_box",
+      use_container_width=True,
+  )
+  st.session_state.pos_items_data = edited_pos_df
 
-    if calc_button:
-      total_amt = pos_price * pos_qty
-      st.markdown("---")
-      st.success("### 🛒 Bill Calculation Result:")
-      st.markdown(f"**Item Name:** {pos_item_name}")
-      st.markdown(f"**Price per Unit:** Rs. {pos_price:,.2f}")
-      st.markdown(f"**Quantity Sold:** {pos_qty}")
-      st.markdown(
-          f"### 💰 **Total Amount:** Rs. {total_amt:,.2f}",
-          unsafe_allow_html=True,
-      )
+  if not edited_pos_df.empty:
+    pos_calc = edited_pos_df.copy()
+    pos_calc["Total Amount"] = (
+        pos_calc["Quantity"] * pos_calc["Price Per Unit"]
+    )
+    grand_total = pos_calc["Total Amount"].sum()
+
+    st.markdown("---")
+    st.subheader("🛒 Bill Calculation Result:")
+    st.dataframe(pos_calc, use_container_width=True)
+
+    st.markdown(f"### 💰 **Grand Total Amount:** Rs. {grand_total:,.2f}")
 
 # ==========================================
 # SCREEN 5: 📈 REPORTS
