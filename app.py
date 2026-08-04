@@ -27,6 +27,7 @@ st.markdown(
 # ==========================================
 INVENTORY_FILE = "inventory_records.csv"
 EXPENSES_FILE = "expenses_records.csv"
+POS_FILE = "pos_sales_records.csv"
 SETTINGS_FILE = "settings.csv"
 AUTH_FILE = "auth_settings.csv"
 
@@ -199,6 +200,12 @@ if nav_option == "🏠 Home Screen":
     merged_home["Cost"] = merged_home["Sale"] * merged_home["Purchase Price"]
     total_rev = merged_home["Revenue"].sum()
     total_cost = merged_home["Cost"].sum()
+
+  # Add POS revenue if available
+  if os.path.exists(POS_FILE):
+    pos_records = pd.read_csv(POS_FILE)
+    if "Total Amount" in pos_records.columns:
+      total_rev += pos_records["Total Amount"].sum()
 
   if os.path.exists(EXPENSES_FILE):
     exp_df = pd.read_csv(EXPENSES_FILE)
@@ -480,22 +487,23 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: ⚡ QUICK SALES (POS) - TABLE BASED
+# SCREEN 4: ⚡ QUICK SALES (POS) - TABLE BASED WITH SAVE HISTORY
 # ==========================================
 elif nav_option == "⚡ Quick Sales (POS)":
   st.title("⚡ Quick Sales Calculator (POS)")
   st.write(
-      "Aap yahan aik sath kai items add kar sakte hain, quantity aur price"
-      " enter karein, aur system khud ba khud total amount calculate kar ke"
-      " dega:"
+      "Aap yahan items add karein, quantity aur price likhein, aur system"
+      " foran total amount calculate karega. Aap chahein toh isay save bhi kar"
+      " sakte hain:"
   )
 
-  # Default sample items for POS table
   if "pos_items_data" not in st.session_state:
     st.session_state.pos_items_data = pd.DataFrame([
         {"Item Name": "Zinger Burger", "Quantity": 2, "Price Per Unit": 450.0},
         {"Item Name": "French Fries", "Quantity": 1, "Price Per Unit": 180.0},
     ])
+
+  pos_date = st.date_input("Select Sale Date", date.today(), key="pos_date_in")
 
   edited_pos_df = st.data_editor(
       st.session_state.pos_items_data,
@@ -506,9 +514,11 @@ elif nav_option == "⚡ Quick Sales (POS)":
   st.session_state.pos_items_data = edited_pos_df
 
   if not edited_pos_df.empty:
+    # Calculate live total
     pos_calc = edited_pos_df.copy()
     pos_calc["Total Amount"] = (
-        pos_calc["Quantity"] * pos_calc["Price Per Unit"]
+        pd.to_numeric(pos_calc["Quantity"], errors="coerce").fillna(0)
+        * pd.to_numeric(pos_calc["Price Per Unit"], errors="coerce").fillna(0)
     )
     grand_total = pos_calc["Total Amount"].sum()
 
@@ -517,6 +527,23 @@ elif nav_option == "⚡ Quick Sales (POS)":
     st.dataframe(pos_calc, use_container_width=True)
 
     st.markdown(f"### 💰 **Grand Total Amount:** Rs. {grand_total:,.2f}")
+
+    if st.button("💾 Save Today's POS Sales"):
+      pos_calc["Date"] = str(pos_date)
+      if os.path.exists(POS_FILE):
+        existing_pos = pd.read_csv(POS_FILE)
+        existing_pos = existing_pos[existing_pos["Date"] != str(pos_date)]
+        updated_pos = pd.concat([existing_pos, pos_calc], ignore_index=True)
+      else:
+        updated_pos = pos_calc
+      updated_pos.to_csv(POS_FILE, index=False)
+      st.success("✅ POS sales saved successfully!")
+
+  if os.path.exists(POS_FILE):
+    st.markdown("---")
+    st.subheader("📜 Saved POS Sales History")
+    saved_pos_history = pd.read_csv(POS_FILE)
+    st.dataframe(saved_pos_history, use_container_width=True)
 
 # ==========================================
 # SCREEN 5: 📈 REPORTS
@@ -567,6 +594,16 @@ elif nav_option == "📈 Monthly & Yearly Reports":
 
         m_revenue = month_data["Revenue"].sum()
         m_profit = month_data["Profit"].sum()
+
+        # Include POS sales if available in that month
+        if os.path.exists(POS_FILE):
+          pos_hist = pd.read_csv(POS_FILE)
+          if "Date" in pos_hist.columns and "Total Amount" in pos_hist.columns:
+            pos_hist["Month"] = pd.to_datetime(
+                pos_hist["Date"], errors="coerce"
+            ).dt.strftime("%Y-%m")
+            m_pos = pos_hist[pos_hist["Month"] == selected_month]
+            m_revenue += m_pos["Total Amount"].sum()
 
         c1, c2 = st.columns(2)
         c1.metric(
