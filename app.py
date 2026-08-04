@@ -201,7 +201,6 @@ if nav_option == "🏠 Home Screen":
     total_rev = merged_home["Revenue"].sum()
     total_cost = merged_home["Cost"].sum()
 
-  # Add POS revenue if available
   if os.path.exists(POS_FILE):
     pos_records = pd.read_csv(POS_FILE)
     if "Total Amount" in pos_records.columns:
@@ -487,57 +486,89 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: ⚡ QUICK SALES (POS) - TABLE BASED WITH SAVE HISTORY
+# SCREEN 4: ⚡ QUICK SALES (POS) - STABLE ROW ADDER
 # ==========================================
 elif nav_option == "⚡ Quick Sales (POS)":
   st.title("⚡ Quick Sales Calculator (POS)")
   st.write(
-      "Aap yahan items add karein, quantity aur price likhein, aur system"
-      " foran total amount calculate karega. Aap chahein toh isay save bhi kar"
-      " sakte hain:"
+      "Aap yahan items add karein, quantity aur price likhein, aur foran"
+      " calculation dekhein:"
   )
 
-  if "pos_items_data" not in st.session_state:
-    st.session_state.pos_items_data = pd.DataFrame([
-        {"Item Name": "Zinger Burger", "Quantity": 2, "Price Per Unit": 450.0},
-        {"Item Name": "French Fries", "Quantity": 1, "Price Per Unit": 180.0},
-    ])
-
-  pos_date = st.date_input("Select Sale Date", date.today(), key="pos_date_in")
-
-  edited_pos_df = st.data_editor(
-      st.session_state.pos_items_data,
-      num_rows="dynamic",
-      key="pos_table_box",
-      use_container_width=True,
+  pos_date = st.date_input(
+      "Select Sale Date", date.today(), key="pos_date_picker"
   )
-  st.session_state.pos_items_data = edited_pos_df
 
-  if not edited_pos_df.empty:
-    # Calculate live total
-    pos_calc = edited_pos_df.copy()
-    pos_calc["Total Amount"] = (
-        pd.to_numeric(pos_calc["Quantity"], errors="coerce").fillna(0)
-        * pd.to_numeric(pos_calc["Price Per Unit"], errors="coerce").fillna(0)
+  if "pos_rows" not in st.session_state:
+    st.session_state.pos_rows = [{
+        "Item Name": "Zinger Burger",
+        "Quantity": 1,
+        "Price Per Unit": 450.0,
+    }]
+
+  # Add Item Button
+  if st.button("➕ Add Another Item"):
+    st.session_state.pos_rows.append(
+        {"Item Name": "Item", "Quantity": 1, "Price Per Unit": 100.0}
     )
-    grand_total = pos_calc["Total Amount"].sum()
+    st.rerun()
 
+  updated_rows = []
+  grand_total = 0.0
+
+  st.markdown("---")
+  for i, row in enumerate(st.session_state.pos_rows):
+    c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
+    with c1:
+      i_name = st.text_input(
+          f"Item Name {i+1}",
+          value=row["Item Name"],
+          key=f"pos_name_{i}",
+      )
+    with c2:
+      i_qty = st.number_input(
+          f"Quantity {i+1}",
+          min_value=1,
+          value=int(row["Quantity"]),
+          key=f"pos_qty_{i}",
+      )
+    with c3:
+      i_price = st.number_input(
+          f"Price per Unit {i+1}",
+          min_value=0.0,
+          value=float(row["Price Per Unit"]),
+          key=f"pos_price_{i}",
+      )
+
+    row_total = i_qty * i_price
+    grand_total += row_total
+
+    with c4:
+      st.write("Total")
+      st.write(f"**Rs. {row_total:,.2f}**")
+
+    updated_rows.append({
+        "Item Name": i_name,
+        "Quantity": i_qty,
+        "Price Per Unit": i_price,
+        "Total Amount": row_total,
+    })
     st.markdown("---")
-    st.subheader("🛒 Bill Calculation Result:")
-    st.dataframe(pos_calc, use_container_width=True)
 
-    st.markdown(f"### 💰 **Grand Total Amount:** Rs. {grand_total:,.2f}")
+  st.markdown(f"### 💰 **Grand Total Amount:** Rs. {grand_total:,.2f}")
 
-    if st.button("💾 Save Today's POS Sales"):
-      pos_calc["Date"] = str(pos_date)
-      if os.path.exists(POS_FILE):
-        existing_pos = pd.read_csv(POS_FILE)
-        existing_pos = existing_pos[existing_pos["Date"] != str(pos_date)]
-        updated_pos = pd.concat([existing_pos, pos_calc], ignore_index=True)
-      else:
-        updated_pos = pos_calc
-      updated_pos.to_csv(POS_FILE, index=False)
-      st.success("✅ POS sales saved successfully!")
+  if st.button("💾 Save Today's POS Sales"):
+    pos_df = pd.DataFrame(updated_rows)
+    pos_df["Date"] = str(pos_date)
+
+    if os.path.exists(POS_FILE):
+      existing_pos = pd.read_csv(POS_FILE)
+      existing_pos = existing_pos[existing_pos["Date"] != str(pos_date)]
+      updated_pos = pd.concat([existing_pos, pos_df], ignore_index=True)
+    else:
+      updated_pos = pos_df
+    updated_pos.to_csv(POS_FILE, index=False)
+    st.success("✅ POS sales saved successfully!")
 
   if os.path.exists(POS_FILE):
     st.markdown("---")
@@ -595,7 +626,6 @@ elif nav_option == "📈 Monthly & Yearly Reports":
         m_revenue = month_data["Revenue"].sum()
         m_profit = month_data["Profit"].sum()
 
-        # Include POS sales if available in that month
         if os.path.exists(POS_FILE):
           pos_hist = pd.read_csv(POS_FILE)
           if "Date" in pos_hist.columns and "Total Amount" in pos_hist.columns:
