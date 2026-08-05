@@ -294,16 +294,8 @@ if nav_option == "🏠 Home Screen":
 elif nav_option == "📦 All Inventory & Daily Entry":
   st.title("📦 Daily Inventory & Sales Entry (Supports Kg & Decimals)")
 
-  with st.form("inventory_date_form"):
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-      selected_date = st.date_input("Select Date", date.today())
-    with col_f2:
-      shift = st.selectbox("Select Shift", ["Morning", "Evening", "Full Day"])
-    with col_f3:
-      st.write("")
-      st.write("")
-      load_form_btn = st.form_submit_button("Load Date Entry Form")
+  current_date_str = str(date.today())
+  default_shift = "Full Day"
 
   st.markdown("---")
   st.subheader("🛠️ Manage Inventory Item Master List")
@@ -321,78 +313,75 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   st.markdown("---")
 
-  existing_record_found = False
-  matched_existing_df = pd.DataFrame()
+  record_key = f"inv_df_{current_date_str}_{default_shift}"
 
-  if os.path.exists(INVENTORY_FILE):
-    all_past_inv = pd.read_csv(INVENTORY_FILE)
-    if not all_past_inv.empty and "Date" in all_past_inv.columns:
-      if "Shift" in all_past_inv.columns:
-        matched_existing_df = all_past_inv[
-            (all_past_inv["Date"] == str(selected_date))
-            & (all_past_inv["Shift"] == shift)
-        ]
-      else:
-        matched_existing_df = all_past_inv[
-            all_past_inv["Date"] == str(selected_date)
-        ]
-
-      if not matched_existing_df.empty:
-        existing_record_found = True
-
-  if existing_record_found:
-    st.success(
-        f"💡 Loaded previously saved record for date: {selected_date} ({shift})"
-    )
-    default_inv = matched_existing_df
-  else:
-    default_rows = []
-    prev_date_str = str(selected_date - timedelta(days=1))
-    has_prev_data = False
+  if record_key not in st.session_state:
+    matched_existing_df = pd.DataFrame()
     if os.path.exists(INVENTORY_FILE):
-      past_inv = pd.read_csv(INVENTORY_FILE)
-      if not past_inv.empty and "Date" in past_inv.columns:
-        prev_day_records = past_inv[past_inv["Date"] == prev_date_str]
-        if not prev_day_records.empty:
-          has_prev_data = True
+      all_past_inv = pd.read_csv(INVENTORY_FILE)
+      if not all_past_inv.empty and "Date" in all_past_inv.columns:
+        if "Shift" in all_past_inv.columns:
+          matched_existing_df = all_past_inv[
+              (all_past_inv["Date"] == current_date_str)
+              & (all_past_inv["Shift"] == default_shift)
+          ]
+        else:
+          matched_existing_df = all_past_inv[
+              all_past_inv["Date"] == current_date_str
+          ]
 
-    inv_master = st.session_state.inventory_master_data
+    if not matched_existing_df.empty:
+      st.session_state[record_key] = matched_existing_df
+    else:
+      default_rows = []
+      prev_date_str = str(date.today() - timedelta(days=1))
+      has_prev_data = False
+      if os.path.exists(INVENTORY_FILE):
+        past_inv = pd.read_csv(INVENTORY_FILE)
+        if not past_inv.empty and "Date" in past_inv.columns:
+          prev_day_records = past_inv[past_inv["Date"] == prev_date_str]
+          if not prev_day_records.empty:
+            has_prev_data = True
 
-    for _, p_row in inv_master.iterrows():
-      i_name = p_row["Item Name"]
-      i_cat = p_row.get("Category", "General")
-      i_unit = p_row.get("Unit", "Pieces")
-      min_limit = float(p_row.get("Min Stock Limit", 10.0))
-      opening_val = 50.0 if i_unit != "Kg" else 5.0
+      inv_master = st.session_state.inventory_master_data
+      for _, p_row in inv_master.iterrows():
+        i_name = p_row["Item Name"]
+        i_cat = p_row.get("Category", "General")
+        i_unit = p_row.get("Unit", "Pieces")
+        min_limit = float(p_row.get("Min Stock Limit", 10.0))
+        opening_val = 50.0 if i_unit != "Kg" else 5.0
 
-      if has_prev_data:
-        matched_item = prev_day_records[prev_day_records["Item Name"] == i_name]
-        if not matched_item.empty:
-          opening_val = float(matched_item.iloc[-1].get("Actual", opening_val))
+        if has_prev_data:
+          matched_item = prev_day_records[
+              prev_day_records["Item Name"] == i_name
+          ]
+          if not matched_item.empty:
+            opening_val = float(
+                matched_item.iloc[-1].get("Actual", opening_val)
+            )
 
-      default_rows.append({
-          "Item Name": i_name,
-          "Category": i_cat,
-          "Unit": i_unit,
-          "Opening": opening_val,
-          "Additional": 0.0,
-          "Sale": 0.0,
-          "Discount": 0.0,
-          "Return": 0.0,
-          "Wastage": 0.0,
-          "Actual": opening_val,
-          "Min Stock Limit": min_limit,
-      })
-
-    default_inv = pd.DataFrame(default_rows)
-    if has_prev_data:
-      st.success(
-          f"💡 Opening stock loaded from previous day ({prev_date_str})!"
-      )
+        default_rows.append({
+            "Item Name": i_name,
+            "Category": i_cat,
+            "Unit": i_unit,
+            "Opening": opening_val,
+            "Additional": 0.0,
+            "Sale": 0.0,
+            "Discount": 0.0,
+            "Return": 0.0,
+            "Wastage": 0.0,
+            "Actual": opening_val,
+            "Min Stock Limit": min_limit,
+        })
+      st.session_state[record_key] = pd.DataFrame(default_rows)
 
   edited_inventory = st.data_editor(
-      default_inv, num_rows="dynamic", key="all_inv_box", use_container_width=True
+      st.session_state[record_key],
+      num_rows="dynamic",
+      key="all_inv_box",
+      use_container_width=True,
   )
+  st.session_state[record_key] = edited_inventory
 
   if not edited_inventory.empty:
     df = edited_inventory.copy()
@@ -409,8 +398,8 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-    df["Date"] = str(selected_date)
-    df["Shift"] = shift
+    df["Date"] = current_date_str
+    df["Shift"] = default_shift
     df["Total"] = df["Opening"] + df["Additional"]
     df["Balance"] = (
         df["Total"] - (df["Sale"] - df["Discount"]) + df["Return"] - df["Wastage"]
@@ -422,17 +411,16 @@ elif nav_option == "📦 All Inventory & Daily Entry":
         existing_df = pd.read_csv(INVENTORY_FILE)
         if "Shift" in existing_df.columns:
           existing_df = existing_df[~(
-              (existing_df["Date"] == str(selected_date))
-              & (existing_df["Shift"] == shift)
+              (existing_df["Date"] == current_date_str)
+              & (existing_df["Shift"] == default_shift)
           )]
         else:
-          existing_df = existing_df[existing_df["Date"] != str(selected_date)]
+          existing_df = existing_df[existing_df["Date"] != current_date_str]
         updated_df = pd.concat([existing_df, df], ignore_index=True)
       else:
         updated_df = df
       updated_df.to_csv(INVENTORY_FILE, index=False)
       st.success("✅ Today's inventory record saved permanently!")
-      st.rerun()
 
     st.markdown("#### 📊 Calculated Report Preview")
     st.dataframe(df, use_container_width=True)
@@ -446,7 +434,9 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     ]
 
     if not demand_df.empty:
-      demand_text = f"--- CHEESY DELIGHTS STOCK DEMAND ({selected_date}) ---\n"
+      demand_text = (
+          f"--- CHEESY DELIGHTS STOCK DEMAND ({current_date_str}) ---\n"
+      )
       for index, row in demand_df.iterrows():
         required_qty = (row["Min Stock Limit"] - row["Actual"]) + 5.0
         demand_text += f"• Item: {row['Item Name']} | Unit: {row['Unit']} | Current: {row['Actual']} {row['Unit']} | Bring: {required_qty} {row['Unit']}\n"
@@ -498,22 +488,22 @@ elif nav_option == "🏷️ Pricing & Expenses":
   st.title("💸 Daily Expenses & Categories")
 
   st.subheader("💸 Daily Expenses Box")
-  default_expenses = pd.DataFrame([
-      {
-          "Expense Reason": "Utility / Bills",
-          "Category": "Utilities",
-          "Amount": 1500.0,
-      },
-      {
-          "Expense Reason": "Raw Material Cash",
-          "Category": "Raw Material",
-          "Amount": 2000.0,
-      },
-  ])
+  if "expenses_df_state" not in st.session_state:
+    st.session_state.expenses_df_state = pd.DataFrame([
+        {
+            "Expense Reason": "Utility / Bills",
+            "Category": "Utilities",
+            "Amount": 1500.0,
+        },
+        {
+            "Expense Reason": "Raw Material Cash",
+            "Category": "Raw Material",
+            "Amount": 2000.0,
+        },
+    ])
 
-  # Column configuration to support category selection dropdown
   edited_expenses = st.data_editor(
-      default_expenses,
+      st.session_state.expenses_df_state,
       num_rows="dynamic",
       key="exp_box",
       use_container_width=True,
@@ -533,6 +523,7 @@ elif nav_option == "🏷️ Pricing & Expenses":
           )
       },
   )
+  st.session_state.expenses_df_state = edited_expenses
 
   if st.button("💾 Save Today's Expenses"):
     edited_expenses["Date"] = str(date.today())
@@ -621,16 +612,13 @@ elif nav_option == "⚡ Quick Sales (POS)":
         updated_pos = df_pos
       updated_pos.to_csv(POS_FILE, index=False)
 
-      # Automatically deduct sales from inventory records if available for this date
       if os.path.exists(INVENTORY_FILE):
         inv_df = pd.read_csv(INVENTORY_FILE)
-        # Check if row for pos_date exists in inventory
         date_mask = inv_df["Date"] == str(pos_date)
         if date_mask.any():
           for _, pos_row in df_pos.iterrows():
             i_name = pos_row["Item Name"]
             q_sold = pos_row["Quantity Sold"]
-            # Find item in inventory for this date and update Sale quantity
             item_match = date_mask & (inv_df["Item Name"] == i_name)
             if item_match.any():
               current_sale = float(
@@ -638,7 +626,7 @@ elif nav_option == "⚡ Quick Sales (POS)":
               )
               new_sale = current_sale + q_sold
               inv_df.loc[item_match, "Sale"] = new_sale
-              # Recalculate Balance & Actual based on new sale
+
               opening = float(inv_df.loc[item_match, "Opening"].values[0] or 0.0)
               additional = float(
                   inv_df.loc[item_match, "Additional"].values[0] or 0.0
@@ -658,9 +646,7 @@ elif nav_option == "⚡ Quick Sales (POS)":
                   total_stock - (new_sale - discount) + return_val - wastage
               )
               inv_df.loc[item_match, "Balance"] = balance
-              inv_df.loc[item_match, "Actual"] = (
-                  balance  # Sync actual with balance or keep updated
-              )
+              inv_df.loc[item_match, "Actual"] = balance
 
           inv_df.to_csv(INVENTORY_FILE, index=False)
 
@@ -836,9 +822,9 @@ elif nav_option == "📈 Monthly & Yearly Reports":
       st.subheader("🔍 Custom Date Range Filter")
       d_col1, d_col2 = st.columns(2)
       with d_col1:
-        start_d = st.date_input("Start Date", date.today())
+        start_d = st.date_input("Start Date", date.today(), key="rep_start")
       with d_col2:
-        end_d = st.date_input("End Date", date.today())
+        end_d = st.date_input("End Date", date.today(), key="rep_end")
 
       filtered_range_data = merged_rep[
           (merged_rep["Date_Parsed"].dt.date >= start_d)
