@@ -304,6 +304,12 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   st.markdown("---")
   st.subheader("🛠️ Manage Inventory Item Master List")
+
+
+  def update_master_state():
+    st.session_state.inventory_master_data = st.session_state["inv_master_box"]
+
+
   with st.expander(
       "Click here to add/edit items (e.g., set Unit to 'Kg' for vegetables or"
       " meat)"
@@ -312,6 +318,7 @@ elif nav_option == "📦 All Inventory & Daily Entry":
         st.session_state.inventory_master_data,
         num_rows="dynamic",
         key="inv_master_box",
+        on_change=update_master_state,
         use_container_width=True,
     )
     st.session_state.inventory_master_data = edited_inv_master
@@ -341,7 +348,6 @@ elif nav_option == "📦 All Inventory & Daily Entry":
         temp_df = temp_df.drop(columns=["Date"])
       if "Shift" in temp_df.columns:
         temp_df = temp_df.drop(columns=["Shift"])
-      # Remove old calculated columns so they auto-calculate fresh
       for col_to_drop in ["Total", "Balance", "Variance"]:
         if col_to_drop in temp_df.columns:
           temp_df = temp_df.drop(columns=[col_to_drop])
@@ -389,14 +395,19 @@ elif nav_option == "📦 All Inventory & Daily Entry":
         })
       st.session_state[record_key] = pd.DataFrame(default_rows)
 
+
+  def update_inventory_state():
+    st.session_state[record_key] = st.session_state["all_inv_box"]
+
+
   edited_inventory = st.data_editor(
       st.session_state[record_key],
       num_rows="dynamic",
       key="all_inv_box",
+      on_change=update_inventory_state,
       use_container_width=True,
   )
 
-  # Clean up any empty or None rows from the editor automatically
   if not edited_inventory.empty:
     edited_inventory = edited_inventory.dropna(
         subset=["Item Name"], how="any"
@@ -425,14 +436,12 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-    # Auto-adjust Total, Balance, and Variance
     df["Total"] = df["Opening"] + df["Additional"]
     df["Balance"] = (
         df["Total"] - (df["Sale"] - df["Discount"]) + df["Return"] - df["Wastage"]
     )
     df["Variance"] = df["Actual"] - df["Balance"]
 
-    # Assign Date and Shift for saving purpose only
     df["Date"] = str(selected_date)
     df["Shift"] = shift
 
@@ -459,7 +468,6 @@ elif nav_option == "📦 All Inventory & Daily Entry":
   st.subheader("📦 Demand Box (Send Order via WhatsApp with Units)")
 
   if not edited_inventory.empty:
-    # Calculate values on edited_inventory for demand preview
     demand_calc = edited_inventory.copy()
     for col in ["Actual", "Min Stock Limit"]:
       demand_calc[col] = pd.to_numeric(demand_calc[col], errors="coerce").fillna(
@@ -537,10 +545,16 @@ elif nav_option == "🏷️ Pricing & Expenses":
         },
     ])
 
+
+  def update_expenses_state():
+    st.session_state.expenses_df_state = st.session_state["exp_box"]
+
+
   edited_expenses = st.data_editor(
       st.session_state.expenses_df_state,
       num_rows="dynamic",
       key="exp_box",
+      on_change=update_expenses_state,
       use_container_width=True,
       column_config={
           "Category": st.column_config.SelectboxColumn(
@@ -608,10 +622,16 @@ elif nav_option == "⚡ Quick Sales (POS)":
         },
     ])
 
+
+  def update_pos_state():
+    st.session_state.pos_df_state = st.session_state["pos_table_editor"]
+
+
   edited_pos_df = st.data_editor(
       st.session_state.pos_df_state,
       num_rows="dynamic",
       key="pos_table_editor",
+      on_change=update_pos_state,
       use_container_width=True,
   )
   st.session_state.pos_df_state = edited_pos_df
