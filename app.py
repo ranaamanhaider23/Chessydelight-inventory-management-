@@ -531,7 +531,11 @@ elif nav_option == "🏷️ Pricing & Expenses":
   st.title("💸 Daily Expenses & Categories")
 
   st.subheader("💸 Daily Expenses Box")
-  if "expenses_df_state" not in st.session_state:
+  if (
+      "expenses_df_state" not in st.session_state
+      or not isinstance(st.session_state.expenses_df_state, pd.DataFrame)
+      or st.session_state.expenses_df_state.empty
+  ):
     st.session_state.expenses_df_state = pd.DataFrame([
         {
             "Expense Reason": "Utility / Bills",
@@ -556,34 +560,20 @@ elif nav_option == "🏷️ Pricing & Expenses":
       key="exp_box",
       on_change=update_expenses_state,
       use_container_width=True,
-      column_config={
-          "Category": st.column_config.SelectboxColumn(
-              "Category",
-              help="Select expense category",
-              options=[
-                  "Raw Material",
-                  "Utilities",
-                  "Salaries",
-                  "Rent",
-                  "Maintenance",
-                  "Miscellaneous",
-              ],
-              required=True,
-          )
-      },
   )
   st.session_state.expenses_df_state = edited_expenses
 
   if st.button("💾 Save Today's Expenses"):
-    edited_expenses["Date"] = str(date.today())
-    if os.path.exists(EXPENSES_FILE):
-      exp_df = pd.read_csv(EXPENSES_FILE)
-      exp_df = exp_df[exp_df["Date"] != str(date.today())]
-      exp_updated = pd.concat([exp_df, edited_expenses], ignore_index=True)
-    else:
-      exp_updated = edited_expenses
-    exp_updated.to_csv(EXPENSES_FILE, index=False)
-    st.success("✅ Expenses saved permanently!")
+    if not edited_expenses.empty:
+      edited_expenses["Date"] = str(date.today())
+      if os.path.exists(EXPENSES_FILE):
+        exp_df = pd.read_csv(EXPENSES_FILE)
+        exp_df = exp_df[exp_df["Date"] != str(date.today())]
+        exp_updated = pd.concat([exp_df, edited_expenses], ignore_index=True)
+      else:
+        exp_updated = edited_expenses
+      exp_updated.to_csv(EXPENSES_FILE, index=False)
+      st.success("✅ Expenses saved permanently!")
 
   if os.path.exists(EXPENSES_FILE):
     exp_history = pd.read_csv(EXPENSES_FILE)
