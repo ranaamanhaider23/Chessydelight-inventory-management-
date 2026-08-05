@@ -615,8 +615,7 @@ elif nav_option == "📈 Monthly & Yearly Reports":
           columns=["Category_x", "Category_y"], errors="ignore", inplace=True
       )
 
-    merged_rep["Revenue"] = merged_rep["Sale"] * merged_port["Selling Price"] if "Selling Price" in merged_rep.columns else merged_rep["Sale"] * 0
-    # Safe calculation for revenue & profit
+    # Fixed revenue, cost and profit calculations
     merged_rep["Revenue"] = merged_rep["Sale"] * merged_rep.get(
         "Selling Price", 0
     )
