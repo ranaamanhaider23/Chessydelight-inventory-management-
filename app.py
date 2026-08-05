@@ -32,7 +32,7 @@ SETTINGS_FILE = "settings.csv"
 AUTH_FILE = "auth_settings.csv"
 
 # ==========================================
-# 🔐 AUTHENTICATION & LOGIN SYSTEM
+# 🔐 AUTHENTICATION & PERSISTENT LOGIN SYSTEM
 # ==========================================
 if os.path.exists(AUTH_FILE):
   auth_df = pd.read_csv(AUTH_FILE)
@@ -54,6 +54,11 @@ if os.path.exists(AUTH_FILE):
 else:
   saved_admin_name, saved_user, saved_pass = "Admin", "admin", "1234"
 
+# Use st.query_params to persist login across page refreshes
+query_params = st.query_params
+if "logged_in" in query_params and query_params["logged_in"] == "true":
+  st.session_state.authenticated = True
+
 if "authenticated" not in st.session_state:
   st.session_state.authenticated = False
 
@@ -69,6 +74,7 @@ if not st.session_state.authenticated:
     if login_btn:
       if entered_user == str(saved_user) and entered_pass == str(saved_pass):
         st.session_state.authenticated = True
+        st.query_params["logged_in"] = "true"
         st.rerun()
       else:
         st.error("❌ Incorrect Username or Password! Please try again.")
@@ -136,6 +142,8 @@ with st.sidebar:
   st.markdown("---")
   if st.button("🔒 Logout"):
     st.session_state.authenticated = False
+    if "logged_in" in st.query_params:
+      del st.query_params["logged_in"]
     st.rerun()
 
 # ==========================================
@@ -312,7 +320,6 @@ elif nav_option == "📦 All Inventory & Daily Entry":
   if os.path.exists(INVENTORY_FILE):
     all_past_inv = pd.read_csv(INVENTORY_FILE)
     if not all_past_inv.empty and "Date" in all_past_inv.columns:
-      # Filter matching date and shift
       if "Shift" in all_past_inv.columns:
         matched_existing_df = all_past_inv[
             (all_past_inv["Date"] == str(selected_date))
@@ -608,8 +615,14 @@ elif nav_option == "📈 Monthly & Yearly Reports":
           columns=["Category_x", "Category_y"], errors="ignore", inplace=True
       )
 
-    merged_rep["Revenue"] = merged_rep["Sale"] * merged_rep["Selling Price"]
-    merged_rep["Cost"] = merged_rep["Sale"] * merged_rep["Purchase Price"]
+    merged_rep["Revenue"] = merged_rep["Sale"] * merged_port["Selling Price"] if "Selling Price" in merged_rep.columns else merged_rep["Sale"] * 0
+    # Safe calculation for revenue & profit
+    merged_rep["Revenue"] = merged_rep["Sale"] * merged_rep.get(
+        "Selling Price", 0
+    )
+    merged_rep["Cost"] = merged_rep["Sale"] * merged_rep.get(
+        "Purchase Price", 0
+    )
     merged_rep["Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
 
     merged_rep["Date_Parsed"] = pd.to_datetime(
@@ -858,4 +871,3 @@ else:
       })
       settings_save.to_csv(SETTINGS_FILE, index=False)
       st.success("✅ WhatsApp settings saved permanently!")
-      
