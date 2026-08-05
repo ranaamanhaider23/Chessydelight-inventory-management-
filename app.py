@@ -54,7 +54,6 @@ if os.path.exists(AUTH_FILE):
 else:
   saved_admin_name, saved_user, saved_pass = "Admin", "admin", "1234"
 
-# Use st.query_params to persist login across page refreshes
 query_params = st.query_params
 if "logged_in" in query_params and query_params["logged_in"] == "true":
   st.session_state.authenticated = True
@@ -147,7 +146,7 @@ with st.sidebar:
     st.rerun()
 
 # ==========================================
-# DATA FRAMES INITIALIZATION (Independent)
+# DATA FRAMES INITIALIZATION
 # ==========================================
 if "prices_data" not in st.session_state:
   st.session_state.prices_data = pd.DataFrame([
@@ -163,6 +162,12 @@ if "prices_data" not in st.session_state:
           "Purchase Price": 80.0,
           "Selling Price": 180.0,
       },
+      {
+          "Item Name": "Onion",
+          "Category": "Vegetables",
+          "Purchase Price": 150.0,
+          "Selling Price": 0.0,
+      },
   ])
 
 if "inventory_master_data" not in st.session_state:
@@ -171,19 +176,19 @@ if "inventory_master_data" not in st.session_state:
           "Item Name": "Zinger Burger",
           "Category": "Burgers",
           "Unit": "Pieces",
-          "Min Stock Limit": 10,
+          "Min Stock Limit": 10.0,
       },
       {
           "Item Name": "French Fries (Large)",
           "Category": "Fries",
           "Unit": "Portion",
-          "Min Stock Limit": 15,
+          "Min Stock Limit": 15.0,
       },
       {
           "Item Name": "Onion",
           "Category": "Vegetables",
           "Unit": "Kg",
-          "Min Stock Limit": 5,
+          "Min Stock Limit": 5.0,
       },
   ])
 
@@ -266,7 +271,7 @@ if nav_option == "🏠 Home Screen":
           for _, row in low_stock_items.iterrows():
             st.markdown(
                 f"- **{row['Item Name']}**: Current Stock = {row['Actual']}"
-                f" (Limit: {row['Min Stock Limit']})"
+                f" {row.get('Unit', '')} (Limit: {row['Min Stock Limit']} {row.get('Unit', '')})"
             )
         else:
           st.success("✅ All live stock items have sufficient levels.")
@@ -287,7 +292,7 @@ if nav_option == "🏠 Home Screen":
 # SCREEN 2: 📦 ALL INVENTORY & DAILY ENTRY
 # ==========================================
 elif nav_option == "📦 All Inventory & Daily Entry":
-  st.title("📦 Daily Inventory & Sales Entry")
+  st.title("📦 Daily Inventory & Sales Entry (Supports Kg & Decimals)")
 
   with st.form("inventory_date_form"):
     col_f1, col_f2, col_f3 = st.columns(3)
@@ -302,7 +307,10 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   st.markdown("---")
   st.subheader("🛠️ Manage Inventory Item Master List")
-  with st.expander("Click here to add/edit items appearing in Daily Entry"):
+  with st.expander(
+      "Click here to add/edit items (e.g., set Unit to 'Kg' for vegetables or"
+      " meat)"
+  ):
     edited_inv_master = st.data_editor(
         st.session_state.inventory_master_data,
         num_rows="dynamic",
@@ -313,7 +321,6 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   st.markdown("---")
 
-  # Check if record already exists for selected date and shift
   existing_record_found = False
   matched_existing_df = pd.DataFrame()
 
@@ -355,24 +362,24 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       i_name = p_row["Item Name"]
       i_cat = p_row.get("Category", "General")
       i_unit = p_row.get("Unit", "Pieces")
-      min_limit = int(p_row.get("Min Stock Limit", 10))
-      opening_val = 50
+      min_limit = float(p_row.get("Min Stock Limit", 10.0))
+      opening_val = 50.0 if i_unit != "Kg" else 5.0
 
       if has_prev_data:
         matched_item = prev_day_records[prev_day_records["Item Name"] == i_name]
         if not matched_item.empty:
-          opening_val = int(matched_item.iloc[-1].get("Actual", 50))
+          opening_val = float(matched_item.iloc[-1].get("Actual", opening_val))
 
       default_rows.append({
           "Item Name": i_name,
           "Category": i_cat,
           "Unit": i_unit,
           "Opening": opening_val,
-          "Additional": 0,
-          "Sale": 0,
-          "Discount": 0,
-          "Return": 0,
-          "Wastage": 0,
+          "Additional": 0.0,
+          "Sale": 0.0,
+          "Discount": 0.0,
+          "Return": 0.0,
+          "Wastage": 0.0,
           "Actual": opening_val,
           "Min Stock Limit": min_limit,
       })
@@ -389,6 +396,19 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   if not edited_inventory.empty:
     df = edited_inventory.copy()
+    for col in [
+        "Opening",
+        "Additional",
+        "Sale",
+        "Discount",
+        "Return",
+        "Wastage",
+        "Actual",
+        "Min Stock Limit",
+    ]:
+      if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+
     df["Date"] = str(selected_date)
     df["Shift"] = shift
     df["Total"] = df["Opening"] + df["Additional"]
@@ -418,7 +438,7 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     st.dataframe(df, use_container_width=True)
 
   st.markdown("---")
-  st.subheader("📦 Demand Box (Send Order via WhatsApp)")
+  st.subheader("📦 Demand Box (Send Order via WhatsApp with Units)")
 
   if not edited_inventory.empty:
     demand_df = edited_inventory[
@@ -428,8 +448,8 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     if not demand_df.empty:
       demand_text = f"--- CHEESY DELIGHTS STOCK DEMAND ({selected_date}) ---\n"
       for index, row in demand_df.iterrows():
-        required_qty = (row["Min Stock Limit"] - row["Actual"]) + 10
-        demand_text += f"• Item: {row['Item Name']} | Unit: {row['Unit']} | Current: {row['Actual']} | Bring: {required_qty}\n"
+        required_qty = (row["Min Stock Limit"] - row["Actual"]) + 5.0
+        demand_text += f"• Item: {row['Item Name']} | Unit: {row['Unit']} | Current: {row['Actual']} {row['Unit']} | Bring: {required_qty} {row['Unit']}\n"
 
       final_demand_text = st.text_area(
           "Review Order Text:", value=demand_text, height=140
@@ -475,21 +495,43 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 # SCREEN 3: 🏷️ EXPENSES MANAGEMENT
 # ==========================================
 elif nav_option == "🏷️ Pricing & Expenses":
-  st.title("💸 Daily Expenses Management")
+  st.title("💸 Daily Expenses & Categories")
 
   st.subheader("💸 Daily Expenses Box")
-  default_expenses = pd.DataFrame([{
-      "Expense Reason": "Utility / Bills",
-      "Amount": 1500.0,
-  }, {
-      "Expense Reason": "Raw Material Cash",
-      "Amount": 2000.0,
-  }])
+  default_expenses = pd.DataFrame([
+      {
+          "Expense Reason": "Utility / Bills",
+          "Category": "Utilities",
+          "Amount": 1500.0,
+      },
+      {
+          "Expense Reason": "Raw Material Cash",
+          "Category": "Raw Material",
+          "Amount": 2000.0,
+      },
+  ])
+
+  # Column configuration to support category selection dropdown
   edited_expenses = st.data_editor(
       default_expenses,
       num_rows="dynamic",
       key="exp_box",
       use_container_width=True,
+      column_config={
+          "Category": st.column_config.SelectboxColumn(
+              "Category",
+              help="Select expense category",
+              options=[
+                  "Raw Material",
+                  "Utilities",
+                  "Salaries",
+                  "Rent",
+                  "Maintenance",
+                  "Miscellaneous",
+              ],
+              required=True,
+          )
+      },
   )
 
   if st.button("💾 Save Today's Expenses"):
@@ -505,21 +547,21 @@ elif nav_option == "🏷️ Pricing & Expenses":
 
   if os.path.exists(EXPENSES_FILE):
     exp_history = pd.read_csv(EXPENSES_FILE)
-    if not exp_history.empty and "Expense Reason" in exp_history.columns:
-      st.markdown("#### 📊 Expenses Breakdown Chart")
+    if not exp_history.empty and "Category" in exp_history.columns:
+      st.markdown("#### 📊 Expenses Breakdown by Category")
       exp_chart_data = (
-          exp_history.groupby("Expense Reason")["Amount"].sum().reset_index()
+          exp_history.groupby("Category")["Amount"].sum().reset_index()
       )
-      st.bar_chart(exp_chart_data.set_index("Expense Reason"))
+      st.bar_chart(exp_chart_data.set_index("Category"))
 
 # ==========================================
 # SCREEN 4: ⚡ QUICK SALES (POS)
 # ==========================================
 elif nav_option == "⚡ Quick Sales (POS)":
-  st.title("⚡ Quick Sales Calculator (POS)")
+  st.title("⚡ Quick Sales Calculator (POS with Inventory Link)")
   st.write(
-      "Add and edit items like the inventory box. Enter the quantity sold and"
-      " remaining stock, and totals will calculate automatically:"
+      "Add items sold. When saved, quantities will automatically deduct from"
+      " your main stock records:"
   )
 
   pos_date = st.date_input(
@@ -530,14 +572,12 @@ elif nav_option == "⚡ Quick Sales (POS)":
     st.session_state.pos_df_state = pd.DataFrame([
         {
             "Item Name": "Zinger Burger",
-            "Quantity Sold": 1,
-            "Stock Remaining": 15,
+            "Quantity Sold": 1.0,
             "Price Per Unit": 450.0,
         },
         {
             "Item Name": "French Fries (Large)",
-            "Quantity Sold": 2,
-            "Stock Remaining": 20,
+            "Quantity Sold": 2.0,
             "Price Per Unit": 180.0,
         },
     ])
@@ -554,16 +594,13 @@ elif nav_option == "⚡ Quick Sales (POS)":
     df_pos = edited_pos_df.copy()
     df_pos["Quantity Sold"] = pd.to_numeric(
         df_pos["Quantity Sold"], errors="coerce"
-    ).fillna(0)
-    df_pos["Stock Remaining"] = pd.to_numeric(
-        df_pos["Stock Remaining"], errors="coerce"
-    ).fillna(0)
+    ).fillna(0.0)
     df_pos["Price Per Unit"] = pd.to_numeric(
         df_pos["Price Per Unit"], errors="coerce"
     ).fillna(0.0)
     df_pos["Total Amount"] = df_pos["Quantity Sold"] * df_pos["Price Per Unit"]
 
-    total_items_sold = int(df_pos["Quantity Sold"].sum())
+    total_items_sold = df_pos["Quantity Sold"].sum()
     grand_total = float(df_pos["Total Amount"].sum())
 
     st.markdown("---")
@@ -574,7 +611,7 @@ elif nav_option == "⚡ Quick Sales (POS)":
     st.markdown("#### 📊 POS Calculated Summary Preview")
     st.dataframe(df_pos, use_container_width=True)
 
-    if st.button("💾 Save Today's POS Sales"):
+    if st.button("💾 Save Today's POS Sales & Update Inventory"):
       df_pos["Date"] = str(pos_date)
       if os.path.exists(POS_FILE):
         existing_pos = pd.read_csv(POS_FILE)
@@ -583,7 +620,51 @@ elif nav_option == "⚡ Quick Sales (POS)":
       else:
         updated_pos = df_pos
       updated_pos.to_csv(POS_FILE, index=False)
-      st.success("✅ POS sales saved successfully!")
+
+      # Automatically deduct sales from inventory records if available for this date
+      if os.path.exists(INVENTORY_FILE):
+        inv_df = pd.read_csv(INVENTORY_FILE)
+        # Check if row for pos_date exists in inventory
+        date_mask = inv_df["Date"] == str(pos_date)
+        if date_mask.any():
+          for _, pos_row in df_pos.iterrows():
+            i_name = pos_row["Item Name"]
+            q_sold = pos_row["Quantity Sold"]
+            # Find item in inventory for this date and update Sale quantity
+            item_match = date_mask & (inv_df["Item Name"] == i_name)
+            if item_match.any():
+              current_sale = float(
+                  inv_df.loc[item_match, "Sale"].values[0] or 0.0
+              )
+              new_sale = current_sale + q_sold
+              inv_df.loc[item_match, "Sale"] = new_sale
+              # Recalculate Balance & Actual based on new sale
+              opening = float(inv_df.loc[item_match, "Opening"].values[0] or 0.0)
+              additional = float(
+                  inv_df.loc[item_match, "Additional"].values[0] or 0.0
+              )
+              discount = float(
+                  inv_df.loc[item_match, "Discount"].values[0] or 0.0
+              )
+              return_val = float(
+                  inv_df.loc[item_match, "Return"].values[0] or 0.0
+              )
+              wastage = float(
+                  inv_df.loc[item_match, "Wastage"].values[0] or 0.0
+              )
+
+              total_stock = opening + additional
+              balance = (
+                  total_stock - (new_sale - discount) + return_val - wastage
+              )
+              inv_df.loc[item_match, "Balance"] = balance
+              inv_df.loc[item_match, "Actual"] = (
+                  balance  # Sync actual with balance or keep updated
+              )
+
+          inv_df.to_csv(INVENTORY_FILE, index=False)
+
+      st.success("✅ POS sales saved and inventory updated automatically!")
 
   if os.path.exists(POS_FILE):
     st.markdown("---")
@@ -615,12 +696,14 @@ elif nav_option == "📈 Monthly & Yearly Reports":
           columns=["Category_x", "Category_y"], errors="ignore", inplace=True
       )
 
-    # Fixed revenue, cost and profit calculations
+    merged_rep["Sale"] = pd.to_numeric(
+        merged_rep["Sale"], errors="coerce"
+    ).fillna(0.0)
     merged_rep["Revenue"] = merged_rep["Sale"] * merged_rep.get(
-        "Selling Price", 0
+        "Selling Price", 0.0
     )
     merged_rep["Cost"] = merged_rep["Sale"] * merged_rep.get(
-        "Purchase Price", 0
+        "Purchase Price", 0.0
     )
     merged_rep["Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
 
@@ -671,6 +754,7 @@ elif nav_option == "📈 Monthly & Yearly Reports":
                 "Date",
                 "Item Name",
                 "Category",
+                "Unit",
                 "Sale",
                 "Revenue",
                 "Profit",
@@ -730,6 +814,7 @@ elif nav_option == "📈 Monthly & Yearly Reports":
                 "Month",
                 "Item Name",
                 "Category",
+                "Unit",
                 "Sale",
                 "Revenue",
                 "Profit",
@@ -774,6 +859,7 @@ elif nav_option == "📈 Monthly & Yearly Reports":
                 "Date",
                 "Item Name",
                 "Category",
+                "Unit",
                 "Sale",
                 "Revenue",
                 "Profit",
@@ -869,4 +955,4 @@ else:
           "Value": [b1_name_in, b1_phone_in, b2_name_in, b2_phone_in],
       })
       settings_save.to_csv(SETTINGS_FILE, index=False)
-      st.success("✅ WhatsApp settings saved permanently!")
+      st.success("✅ WhatsApp settings saved successfully!")
