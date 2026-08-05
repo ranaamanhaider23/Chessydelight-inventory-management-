@@ -294,8 +294,13 @@ if nav_option == "🏠 Home Screen":
 elif nav_option == "📦 All Inventory & Daily Entry":
   st.title("📦 Daily Inventory & Sales Entry (Supports Kg & Decimals)")
 
-  current_date_str = str(date.today())
-  default_shift = "Full Day"
+  col_f1, col_f2 = st.columns(2)
+  with col_f1:
+    selected_date = st.date_input("Select Date", date.today(), key="inv_date")
+  with col_f2:
+    shift = st.selectbox(
+        "Select Shift", ["Morning", "Evening", "Full Day"], key="inv_shift"
+    )
 
   st.markdown("---")
   st.subheader("🛠️ Manage Inventory Item Master List")
@@ -313,7 +318,7 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   st.markdown("---")
 
-  record_key = f"inv_df_{current_date_str}_{default_shift}"
+  record_key = f"inv_df_{selected_date}_{shift}"
 
   if record_key not in st.session_state:
     matched_existing_df = pd.DataFrame()
@@ -322,19 +327,19 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       if not all_past_inv.empty and "Date" in all_past_inv.columns:
         if "Shift" in all_past_inv.columns:
           matched_existing_df = all_past_inv[
-              (all_past_inv["Date"] == current_date_str)
-              & (all_past_inv["Shift"] == default_shift)
+              (all_past_inv["Date"] == str(selected_date))
+              & (all_past_inv["Shift"] == shift)
           ]
         else:
           matched_existing_df = all_past_inv[
-              all_past_inv["Date"] == current_date_str
+              all_past_inv["Date"] == str(selected_date)
           ]
 
     if not matched_existing_df.empty:
       st.session_state[record_key] = matched_existing_df
     else:
       default_rows = []
-      prev_date_str = str(date.today() - timedelta(days=1))
+      prev_date_str = str(selected_date - timedelta(days=1))
       has_prev_data = False
       if os.path.exists(INVENTORY_FILE):
         past_inv = pd.read_csv(INVENTORY_FILE)
@@ -398,8 +403,8 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-    df["Date"] = current_date_str
-    df["Shift"] = default_shift
+    df["Date"] = str(selected_date)
+    df["Shift"] = shift
     df["Total"] = df["Opening"] + df["Additional"]
     df["Balance"] = (
         df["Total"] - (df["Sale"] - df["Discount"]) + df["Return"] - df["Wastage"]
@@ -411,11 +416,11 @@ elif nav_option == "📦 All Inventory & Daily Entry":
         existing_df = pd.read_csv(INVENTORY_FILE)
         if "Shift" in existing_df.columns:
           existing_df = existing_df[~(
-              (existing_df["Date"] == current_date_str)
-              & (existing_df["Shift"] == default_shift)
+              (existing_df["Date"] == str(selected_date))
+              & (existing_df["Shift"] == shift)
           )]
         else:
-          existing_df = existing_df[existing_df["Date"] != current_date_str]
+          existing_df = existing_df[existing_df["Date"] != str(selected_date)]
         updated_df = pd.concat([existing_df, df], ignore_index=True)
       else:
         updated_df = df
@@ -434,9 +439,7 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     ]
 
     if not demand_df.empty:
-      demand_text = (
-          f"--- CHEESY DELIGHTS STOCK DEMAND ({current_date_str}) ---\n"
-      )
+      demand_text = f"--- CHEESY DELIGHTS STOCK DEMAND ({selected_date}) ---\n"
       for index, row in demand_df.iterrows():
         required_qty = (row["Min Stock Limit"] - row["Actual"]) + 5.0
         demand_text += f"• Item: {row['Item Name']} | Unit: {row['Unit']} | Current: {row['Actual']} {row['Unit']} | Bring: {required_qty} {row['Unit']}\n"
