@@ -336,7 +336,16 @@ elif nav_option == "📦 All Inventory & Daily Entry":
           ]
 
     if not matched_existing_df.empty:
-      st.session_state[record_key] = matched_existing_df
+      temp_df = matched_existing_df.copy()
+      if "Date" in temp_df.columns:
+        temp_df = temp_df.drop(columns=["Date"])
+      if "Shift" in temp_df.columns:
+        temp_df = temp_df.drop(columns=["Shift"])
+      # Remove old calculated columns so they auto-calculate fresh
+      for col_to_drop in ["Total", "Balance", "Variance"]:
+        if col_to_drop in temp_df.columns:
+          temp_df = temp_df.drop(columns=[col_to_drop])
+      st.session_state[record_key] = temp_df
     else:
       default_rows = []
       prev_date_str = str(selected_date - timedelta(days=1))
@@ -386,6 +395,19 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       key="all_inv_box",
       use_container_width=True,
   )
+
+  # Clean up any empty or None rows from the editor automatically
+  if not edited_inventory.empty:
+    edited_inventory = edited_inventory.dropna(
+        subset=["Item Name"], how="any"
+    )
+    edited_inventory = edited_inventory[
+        edited_inventory["Item Name"].astype(str).str.strip() != ""
+    ]
+    edited_inventory = edited_inventory[
+        edited_inventory["Item Name"].astype(str).str.lower() != "none"
+    ]
+
   st.session_state[record_key] = edited_inventory
 
   if not edited_inventory.empty:
@@ -403,13 +425,16 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
-    df["Date"] = str(selected_date)
-    df["Shift"] = shift
+    # Auto-adjust Total, Balance, and Variance
     df["Total"] = df["Opening"] + df["Additional"]
     df["Balance"] = (
         df["Total"] - (df["Sale"] - df["Discount"]) + df["Return"] - df["Wastage"]
     )
     df["Variance"] = df["Actual"] - df["Balance"]
+
+    # Assign Date and Shift for saving purpose only
+    df["Date"] = str(selected_date)
+    df["Shift"] = shift
 
     if st.button("💾 Save Today's Record"):
       if os.path.exists(INVENTORY_FILE):
@@ -434,8 +459,15 @@ elif nav_option == "📦 All Inventory & Daily Entry":
   st.subheader("📦 Demand Box (Send Order via WhatsApp with Units)")
 
   if not edited_inventory.empty:
-    demand_df = edited_inventory[
-        edited_inventory["Actual"] <= edited_inventory["Min Stock Limit"]
+    # Calculate values on edited_inventory for demand preview
+    demand_calc = edited_inventory.copy()
+    for col in ["Actual", "Min Stock Limit"]:
+      demand_calc[col] = pd.to_numeric(demand_calc[col], errors="coerce").fillna(
+          0.0
+      )
+
+    demand_df = demand_calc[
+        demand_calc["Actual"] <= demand_calc["Min Stock Limit"]
     ]
 
     if not demand_df.empty:
