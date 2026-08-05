@@ -264,7 +264,7 @@ if nav_option == "🏠 Home Screen":
           st.success("✅ All live stock items have sufficient levels.")
 
   st.markdown("---")
-  st.subheader("📦 Live Stock Overview")
+  st.subheader("📦 Live Stock Overview (Latest Saved Record)")
 
   if os.path.exists(INVENTORY_FILE):
     if latest_date:
@@ -305,49 +305,76 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   st.markdown("---")
 
-  default_rows = []
-  prev_date_str = str(selected_date - timedelta(days=1))
+  # Check if record already exists for selected date and shift
+  existing_record_found = False
+  matched_existing_df = pd.DataFrame()
 
-  has_prev_data = False
   if os.path.exists(INVENTORY_FILE):
-    past_inv = pd.read_csv(INVENTORY_FILE)
-    if not past_inv.empty and "Date" in past_inv.columns:
-      prev_day_records = past_inv[past_inv["Date"] == prev_date_str]
-      if not prev_day_records.empty:
-        has_prev_data = True
+    all_past_inv = pd.read_csv(INVENTORY_FILE)
+    if not all_past_inv.empty and "Date" in all_past_inv.columns:
+      # Filter matching date and shift
+      if "Shift" in all_past_inv.columns:
+        matched_existing_df = all_past_inv[
+            (all_past_inv["Date"] == str(selected_date))
+            & (all_past_inv["Shift"] == shift)
+        ]
+      else:
+        matched_existing_df = all_past_inv[
+            all_past_inv["Date"] == str(selected_date)
+        ]
 
-  inv_master = st.session_state.inventory_master_data
+      if not matched_existing_df.empty:
+        existing_record_found = True
 
-  for _, p_row in inv_master.iterrows():
-    i_name = p_row["Item Name"]
-    i_cat = p_row.get("Category", "General")
-    i_unit = p_row.get("Unit", "Pieces")
-    min_limit = int(p_row.get("Min Stock Limit", 10))
-    opening_val = 50
+  if existing_record_found:
+    st.success(
+        f"💡 Loaded previously saved record for date: {selected_date} ({shift})"
+    )
+    default_inv = matched_existing_df
+  else:
+    default_rows = []
+    prev_date_str = str(selected_date - timedelta(days=1))
+    has_prev_data = False
+    if os.path.exists(INVENTORY_FILE):
+      past_inv = pd.read_csv(INVENTORY_FILE)
+      if not past_inv.empty and "Date" in past_inv.columns:
+        prev_day_records = past_inv[past_inv["Date"] == prev_date_str]
+        if not prev_day_records.empty:
+          has_prev_data = True
 
+    inv_master = st.session_state.inventory_master_data
+
+    for _, p_row in inv_master.iterrows():
+      i_name = p_row["Item Name"]
+      i_cat = p_row.get("Category", "General")
+      i_unit = p_row.get("Unit", "Pieces")
+      min_limit = int(p_row.get("Min Stock Limit", 10))
+      opening_val = 50
+
+      if has_prev_data:
+        matched_item = prev_day_records[prev_day_records["Item Name"] == i_name]
+        if not matched_item.empty:
+          opening_val = int(matched_item.iloc[-1].get("Actual", 50))
+
+      default_rows.append({
+          "Item Name": i_name,
+          "Category": i_cat,
+          "Unit": i_unit,
+          "Opening": opening_val,
+          "Additional": 0,
+          "Sale": 0,
+          "Discount": 0,
+          "Return": 0,
+          "Wastage": 0,
+          "Actual": opening_val,
+          "Min Stock Limit": min_limit,
+      })
+
+    default_inv = pd.DataFrame(default_rows)
     if has_prev_data:
-      matched_item = prev_day_records[prev_day_records["Item Name"] == i_name]
-      if not matched_item.empty:
-        opening_val = int(matched_item.iloc[-1].get("Actual", 50))
-
-    default_rows.append({
-        "Item Name": i_name,
-        "Category": i_cat,
-        "Unit": i_unit,
-        "Opening": opening_val,
-        "Additional": 0,
-        "Sale": 0,
-        "Discount": 0,
-        "Return": 0,
-        "Wastage": 0,
-        "Actual": opening_val,
-        "Min Stock Limit": min_limit,
-    })
-
-  default_inv = pd.DataFrame(default_rows)
-
-  if has_prev_data:
-    st.success(f"💡 Opening stock loaded from previous day ({prev_date_str})!")
+      st.success(
+          f"💡 Opening stock loaded from previous day ({prev_date_str})!"
+      )
 
   edited_inventory = st.data_editor(
       default_inv, num_rows="dynamic", key="all_inv_box", use_container_width=True
@@ -366,15 +393,19 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     if st.button("💾 Save Today's Record"):
       if os.path.exists(INVENTORY_FILE):
         existing_df = pd.read_csv(INVENTORY_FILE)
-        existing_df = existing_df[~(
-            (existing_df["Date"] == str(selected_date))
-            & (existing_df["Shift"] == shift)
-        )]
+        if "Shift" in existing_df.columns:
+          existing_df = existing_df[~(
+              (existing_df["Date"] == str(selected_date))
+              & (existing_df["Shift"] == shift)
+          )]
+        else:
+          existing_df = existing_df[existing_df["Date"] != str(selected_date)]
         updated_df = pd.concat([existing_df, df], ignore_index=True)
       else:
         updated_df = df
       updated_df.to_csv(INVENTORY_FILE, index=False)
       st.success("✅ Today's inventory record saved permanently!")
+      st.rerun()
 
     st.markdown("#### 📊 Calculated Report Preview")
     st.dataframe(df, use_container_width=True)
@@ -434,7 +465,7 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       st.success("✅ All items have sufficient stock levels.")
 
 # ==========================================
-# SCREEN 3: 🏷️ EXPENSES MANAGEMENT (PURCHASE/SELL REMOVED)
+# SCREEN 3: 🏷️ EXPENSES MANAGEMENT
 # ==========================================
 elif nav_option == "🏷️ Pricing & Expenses":
   st.title("💸 Daily Expenses Management")
@@ -475,7 +506,7 @@ elif nav_option == "🏷️ Pricing & Expenses":
       st.bar_chart(exp_chart_data.set_index("Expense Reason"))
 
 # ==========================================
-# SCREEN 4: ⚡ QUICK SALES (POS) - TABLE EDITOR STYLE WITH QUANTITY & REMAINING STOCK
+# SCREEN 4: ⚡ QUICK SALES (POS)
 # ==========================================
 elif nav_option == "⚡ Quick Sales (POS)":
   st.title("⚡ Quick Sales Calculator (POS)")
@@ -827,3 +858,4 @@ else:
       })
       settings_save.to_csv(SETTINGS_FILE, index=False)
       st.success("✅ WhatsApp settings saved permanently!")
+      
