@@ -316,7 +316,11 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   def update_master_state():
     if "inv_master_box" in st.session_state:
-      st.session_state.inventory_master_data = st.session_state["inv_master_box"]
+      val = st.session_state["inv_master_box"]
+      if isinstance(val, dict):
+        st.session_state.inventory_master_data = pd.DataFrame(val)
+      elif isinstance(val, pd.DataFrame):
+        st.session_state.inventory_master_data = val
 
 
   with st.expander(
@@ -332,6 +336,8 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     )
     if isinstance(edited_inv_master, pd.DataFrame):
       st.session_state.inventory_master_data = edited_inv_master
+    elif isinstance(edited_inv_master, dict):
+      st.session_state.inventory_master_data = pd.DataFrame(edited_inv_master)
 
   st.markdown("---")
 
@@ -408,8 +414,16 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
   def update_inventory_state():
     if "all_inv_box" in st.session_state:
-      st.session_state[record_key] = st.session_state["all_inv_box"]
+      val = st.session_state["all_inv_box"]
+      if isinstance(val, dict):
+        st.session_state[record_key] = pd.DataFrame(val)
+      elif isinstance(val, pd.DataFrame):
+        st.session_state[record_key] = val
 
+
+  # Safety check for dataframe format in session state
+  if isinstance(st.session_state[record_key], dict):
+    st.session_state[record_key] = pd.DataFrame(st.session_state[record_key])
 
   edited_inventory = st.data_editor(
       st.session_state[record_key],
@@ -418,6 +432,9 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       on_change=update_inventory_state,
       use_container_width=True,
   )
+
+  if isinstance(edited_inventory, dict):
+    edited_inventory = pd.DataFrame(edited_inventory)
 
   if isinstance(edited_inventory, pd.DataFrame) and not edited_inventory.empty:
     edited_inventory = edited_inventory.dropna(
@@ -562,8 +579,17 @@ elif nav_option == "🏷️ Pricing & Expenses":
 
   def update_expenses_state():
     if "exp_box" in st.session_state:
-      st.session_state.expenses_df_state = st.session_state["exp_box"]
+      val = st.session_state["exp_box"]
+      if isinstance(val, dict):
+        st.session_state.expenses_df_state = pd.DataFrame(val)
+      elif isinstance(val, pd.DataFrame):
+        st.session_state.expenses_df_state = val
 
+
+  if isinstance(st.session_state.expenses_df_state, dict):
+    st.session_state.expenses_df_state = pd.DataFrame(
+        st.session_state.expenses_df_state
+    )
 
   edited_expenses = st.data_editor(
       st.session_state.expenses_df_state,
@@ -574,6 +600,8 @@ elif nav_option == "🏷️ Pricing & Expenses":
   )
   if isinstance(edited_expenses, pd.DataFrame):
     st.session_state.expenses_df_state = edited_expenses
+  elif isinstance(edited_expenses, dict):
+    st.session_state.expenses_df_state = pd.DataFrame(edited_expenses)
 
   if st.button("💾 Save Today's Expenses"):
     if isinstance(edited_expenses, pd.DataFrame) and not edited_expenses.empty:
@@ -631,8 +659,15 @@ elif nav_option == "⚡ Quick Sales (POS)":
 
   def update_pos_state():
     if "pos_table_editor" in st.session_state:
-      st.session_state.pos_df_state = st.session_state["pos_table_editor"]
+      val = st.session_state["pos_table_editor"]
+      if isinstance(val, dict):
+        st.session_state.pos_df_state = pd.DataFrame(val)
+      elif isinstance(val, pd.DataFrame):
+        st.session_state.pos_df_state = val
 
+
+  if isinstance(st.session_state.pos_df_state, dict):
+    st.session_state.pos_df_state = pd.DataFrame(st.session_state.pos_df_state)
 
   edited_pos_df = st.data_editor(
       st.session_state.pos_df_state,
@@ -643,6 +678,8 @@ elif nav_option == "⚡ Quick Sales (POS)":
   )
   if isinstance(edited_pos_df, pd.DataFrame):
     st.session_state.pos_df_state = edited_pos_df
+  elif isinstance(edited_pos_df, dict):
+    st.session_state.pos_df_state = pd.DataFrame(edited_pos_df)
 
   if isinstance(edited_pos_df, pd.DataFrame) and not edited_pos_df.empty:
     df_pos = edited_pos_df.copy()
