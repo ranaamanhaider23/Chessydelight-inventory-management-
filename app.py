@@ -1,21 +1,22 @@
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import date, timedelta
 import urllib.parse
 import os
 
 st.set_page_config(page_title="Cheesy Delights | Restaurant Manager", layout="wide", page_icon="🍕")
 
 # ==========================================
-# 🎨 CUSTOM CSS FOR UI & SCROLLING
+# 🎨 CUSTOM CSS FOR EASY TABLE VIEW & TOUCH-FRIENDLY UI
 # ==========================================
 st.markdown("""
     <style>
         .stDataFrame, .stDataEditor {
-            overflow-x: auto;
+            font-size: 16px;
         }
         .stButton>button {
-            width: 100%;
+            border-radius: 8px;
+            font-weight: bold;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -40,14 +41,12 @@ if os.path.exists(AUTH_FILE):
 else:
     saved_user, saved_pass = "admin", "1234"
 
-# Maintain login state across refreshes
 query_params = st.query_params
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = (query_params.get("logged_in") == "true")
 
 if not st.session_state.authenticated:
     st.title("🔒 Cheesy Delights - Login")
-    st.write("Please enter your username and password to access the application:")
     
     with st.form("login_form"):
         entered_user = st.text_input("Username")
@@ -60,7 +59,7 @@ if not st.session_state.authenticated:
                 st.query_params["logged_in"] = "true"
                 st.rerun()
             else:
-                st.error("❌ Incorrect Username or Password! Please try again.")
+                st.error("❌ Incorrect Username or Password!")
     st.stop()
 
 # ==========================================
@@ -80,13 +79,17 @@ if 'brother_1_phone' not in st.session_state: st.session_state.brother_1_phone =
 if 'brother_2_name' not in st.session_state: st.session_state.brother_2_name = b2_name_def
 if 'brother_2_phone' not in st.session_state: st.session_state.brother_2_phone = str(b2_phone_def)
 
-# Load Pricing List
+# Sync Pricing Data with Unit support (Pieces, KG, Grams, Liters, Portions)
 if os.path.exists(PRICES_FILE):
     st.session_state.prices_data = pd.read_csv(PRICES_FILE)
+    if "Unit" not in st.session_state.prices_data.columns:
+        st.session_state.prices_data["Unit"] = "Pieces"
 else:
     st.session_state.prices_data = pd.DataFrame([
-        {"Item Name": "Zinger Burger", "Purchase Price": 250.0, "Selling Price": 450.0},
-        {"Item Name": "French Fries (Large)", "Purchase Price": 80.0, "Selling Price": 180.0}
+        {"Item Name": "Zinger Burger", "Unit": "Pieces", "Purchase Price": 250.0, "Selling Price": 450.0},
+        {"Item Name": "French Fries (Large)", "Unit": "Portion", "Purchase Price": 80.0, "Selling Price": 180.0},
+        {"Item Name": "Mozzarella Cheese", "Unit": "KG", "Purchase Price": 1200.0, "Selling Price": 1600.0},
+        {"Item Name": "Chicken Meat", "Unit": "KG", "Purchase Price": 600.0, "Selling Price": 800.0}
     ])
 
 # ==========================================
@@ -97,9 +100,9 @@ with st.sidebar:
     nav_option = st.radio(
         "Select Section", 
         [
-            "🏠 Home Screen", 
-            "📦 Daily Inventory & Sales", 
-            "🏷️ Pricing & Sold Items", 
+            "🏠 Dashboard Overview", 
+            "📦 Daily Inventory & Stock", 
+            "🏷️ Pricing & Items Master", 
             "📈 Profit & Loss Reports",
             "⚙️ Settings"
         ]
@@ -111,84 +114,160 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# SCREEN 1: 🏠 HOME SCREEN
+# SCREEN 1: 🏠 DASHBOARD OVERVIEW
 # ==========================================
-if nav_option == "🏠 Home Screen":
+if nav_option == "🏠 Dashboard Overview":
     st.title("🍕 Cheesy Delights - Dashboard")
-    st.write("Live status of stock and quick overview:")
+    st.write("Live Stock Summary & Quick View:")
     
     if os.path.exists(INVENTORY_FILE):
         saved_inv = pd.read_csv(INVENTORY_FILE)
         latest_date = saved_inv["Date"].max() if "Date" in saved_inv.columns else None
         if latest_date:
-            st.info(f"📌 Showing latest saved inventory for: **{latest_date}**")
+            st.info(f"📌 Showing latest saved inventory for date: **{latest_date}**")
             latest_df = saved_inv[saved_inv["Date"] == latest_date]
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Items Tracked", len(latest_df))
+            m2.metric("Total Sales Count", float(latest_df["Sale"].sum()) if "Sale" in latest_df.columns else 0.0)
+            m3.metric("Total Wastage Count", float(latest_df["Wastage"].sum()) if "Wastage" in latest_df.columns else 0.0)
+            
             st.dataframe(latest_df, use_container_width=True)
         else:
             st.dataframe(saved_inv, use_container_width=True)
     else:
-        st.info("ℹ️ No saved inventory records found yet.")
+        st.info("ℹ️ No inventory records saved yet. Start entering stock from the Daily Inventory tab!")
 
 # ==========================================
-# SCREEN 2: 📦 DAILY INVENTORY & SALES ENTRY
+# SCREEN 2: 📦 EASY DAILY INVENTORY (KG & DECIMAL SUPPORT)
 # ==========================================
-elif nav_option == "📦 Daily Inventory & Sales":
-    st.title("📦 Daily Inventory Record")
+elif nav_option == "📦 Daily Inventory & Stock":
+    st.title("📦 Easy Daily Inventory Record")
+    st.caption("✨ Dynamic support for Pieces, KG, Grams, Liters & Portions with automatic decimal stock calculation.")
     
     col1, col2 = st.columns(2)
     with col1:
-        selected_date = st.date_input("Select Entry Date", date.today())
+        selected_date = st.date_input("Select Date", date.today())
     with col2:
         shift = st.selectbox("Select Shift", ["Evening", "Morning", "Full Day"])
 
     st.markdown("---")
     
-    default_inv = pd.DataFrame([
-        {"Item Name": "Zinger Burger", "Unit": "Pieces", "Opening": 50, "Additional": 10, "Sale": 20, "Discount": 2, "Return": 1, "Wastage": 1, "Actual": 5, "Min Stock Limit": 10},
-        {"Item Name": "French Fries (Large)", "Unit": "Portion", "Opening": 40, "Additional": 5, "Sale": 25, "Discount": 0, "Return": 0, "Wastage": 2, "Actual": 18, "Min Stock Limit": 15}
-    ])
+    saved_data_found = False
+    existing_df = pd.DataFrame()
     
-    edited_inventory = st.data_editor(default_inv, num_rows="dynamic", key="all_inv_box", use_container_width=True)
+    if os.path.exists(INVENTORY_FILE):
+        existing_df = pd.read_csv(INVENTORY_FILE)
+        date_shift_data = existing_df[(existing_df["Date"] == str(selected_date)) & (existing_df["Shift"] == shift)]
+        if not date_shift_data.empty:
+            default_inv = date_shift_data.copy()
+            saved_data_found = True
+
+    if not saved_data_found:
+        price_df = st.session_state.prices_data.copy()
+        
+        # Check Yesterday's Closing Stock to Auto-Fill Today's Opening Stock
+        yesterday_date = str(selected_date - timedelta(days=1))
+        yesterday_stock = {}
+        if not existing_df.empty and "Date" in existing_df.columns:
+            yest_df = existing_df[existing_df["Date"] == yesterday_date]
+            if not yest_df.empty:
+                for idx, r in yest_df.iterrows():
+                    yesterday_stock[r["Item Name"]] = float(r.get("Actual", 0.0))
+
+        rows = []
+        for idx, row in price_df.iterrows():
+            item_name = row["Item Name"]
+            unit_val = row.get("Unit", "Pieces")
+            op_val = yesterday_stock.get(item_name, 0.0)
+            
+            rows.append({
+                "Item Name": item_name, 
+                "Unit": unit_val, 
+                "Opening": float(op_val), 
+                "Additional": 0.0, 
+                "Sale": 0.0, 
+                "Discount": 0.0, 
+                "Return": 0.0, 
+                "Wastage": 0.0,
+                "Min Stock Limit": 5.0 if unit_val == "KG" else 10.0
+            })
+        default_inv = pd.DataFrame(rows)
+
+    # Columns list to ensure clean view
+    col_order = ["Item Name", "Unit", "Opening", "Additional", "Sale", "Discount", "Return", "Wastage", "Min Stock Limit"]
+    for col in col_order:
+        if col not in default_inv.columns:
+            default_inv[col] = 0.0
+
+    st.subheader("📝 Edit Inventory Sheet")
+    st.info("💡 **KG Tip:** Aap decimal (maslan `1.5` KG ya `0.25` KG) enter kar sakte hain.")
+    
+    # Column configuration for flexible dropdowns/decimals
+    column_config = {
+        "Unit": st.column_config.SelectboxColumn("Unit", options=["Pieces", "KG", "Grams", "Liters", "Portion"], required=True),
+        "Opening": st.column_config.NumberColumn("Opening", step=0.1, format="%.2f"),
+        "Additional": st.column_config.NumberColumn("Additional", step=0.1, format="%.2f"),
+        "Sale": st.column_config.NumberColumn("Sale", step=0.1, format="%.2f"),
+        "Discount": st.column_config.NumberColumn("Discount", step=0.1, format="%.2f"),
+        "Return": st.column_config.NumberColumn("Return", step=0.1, format="%.2f"),
+        "Wastage": st.column_config.NumberColumn("Wastage", step=0.1, format="%.2f"),
+        "Min Stock Limit": st.column_config.NumberColumn("Min Stock Limit", step=0.1, format="%.2f"),
+    }
+
+    edited_inventory = st.data_editor(
+        default_inv[col_order], 
+        num_rows="dynamic", 
+        column_config=column_config,
+        key=f"inv_box_{selected_date}_{shift}", 
+        use_container_width=True
+    )
 
     if not edited_inventory.empty:
         df = edited_inventory.copy()
+        
+        # 🤖 AUTOMATIC CALCULATIONS WITH DECIMALS
+        df["Total Stock"] = df["Opening"] + df["Additional"]
+        df["Net Sold"] = df["Sale"] - df["Discount"]
+        df["Actual"] = df["Total Stock"] - df["Net Sold"] + df["Return"] - df["Wastage"]
+        
         df["Date"] = str(selected_date)
         df["Shift"] = shift
-        df["Total"] = df["Opening"] + df["Additional"]
-        df["Balance"] = df["Total"] - (df["Sale"] - df["Discount"]) + df["Return"] - df["Wastage"]
-        df["Variance"] = df["Actual"] - df["Balance"]
-        
-        if st.button("💾 Save Today's Inventory Record"):
+
+        st.markdown("### 📊 Auto-Calculated Final Summary")
+        summary_cols = ["Item Name", "Unit", "Opening", "Additional", "Sale", "Return", "Wastage", "Actual", "Min Stock Limit"]
+        st.dataframe(df[summary_cols], use_container_width=True)
+
+        if st.button("💾 Save Inventory Record", type="primary"):
             if os.path.exists(INVENTORY_FILE):
-                existing_df = pd.read_csv(INVENTORY_FILE)
-                existing_df = existing_df[~((existing_df["Date"] == str(selected_date)) & (existing_df["Shift"] == shift))]
-                updated_df = pd.concat([existing_df, df], ignore_index=True)
+                full_df = pd.read_csv(INVENTORY_FILE)
+                full_df = full_df[~((full_df["Date"] == str(selected_date)) & (full_df["Shift"] == shift))]
+                updated_df = pd.concat([full_df, df], ignore_index=True)
             else:
                 updated_df = df
+            
             updated_df.to_csv(INVENTORY_FILE, index=False)
-            st.success("✅ Today's inventory record saved successfully!")
+            st.success("✅ Today's inventory saved successfully!")
+            st.rerun()
 
-        st.markdown("#### 📊 Calculated Entry Summary")
-        st.dataframe(df, use_container_width=True)
-
+    # 📱 WHATSAPP LOW STOCK ALERT
     st.markdown("---")
-    st.subheader("📦 Low Stock Alert & Demand Box (WhatsApp)")
+    st.subheader("📲 WhatsApp Stock Demand Generator")
     
     if not edited_inventory.empty:
-        demand_df = edited_inventory[edited_inventory["Actual"] <= edited_inventory["Min Stock Limit"]]
+        demand_df = df[df["Actual"] <= df["Min Stock Limit"]]
         
         if not demand_df.empty:
+            st.warning("⚠️ Some items are running low on stock!")
             demand_text = f"--- CHEESY DELIGHTS STOCK DEMAND ({selected_date}) ---\n"
             for index, row in demand_df.iterrows():
-                required_qty = (row["Min Stock Limit"] - row["Actual"]) + 10
-                demand_text += f"• {row['Item Name']} ({row['Unit']}) | Current: {row['Actual']} | Order: {required_qty}\n"
+                order_qty = round((row["Min Stock Limit"] - row["Actual"]) + (2.0 if row["Unit"] == "KG" else 10.0), 2)
+                demand_text += f"• {row['Item Name']} | Current: {row['Actual']} {row['Unit']} | Order: {order_qty} {row['Unit']}\n"
             
-            final_demand_text = st.text_area("Review Order Text:", value=demand_text, height=140)
+            final_demand_text = st.text_area("Order List Preview:", value=demand_text, height=120)
             encoded_text = urllib.parse.quote(final_demand_text)
             
-            st.markdown("### 🟢 Send via WhatsApp")
             w_col1, w_col2 = st.columns(2)
-            
             clean_p1 = str(st.session_state.brother_1_phone).replace('+', '').replace(' ', '').replace('-', '')
             clean_p2 = str(st.session_state.brother_2_phone).replace('+', '').replace(' ', '').replace('-', '')
 
@@ -196,163 +275,69 @@ elif nav_option == "📦 Daily Inventory & Sales":
                 if clean_p1:
                     wa_link_1 = f"https://wa.me/{clean_p1}?text={encoded_text}"
                     st.markdown(f'<a href="{wa_link_1}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">💬 Send to {st.session_state.brother_1_name}</button></a>', unsafe_allow_html=True)
-                else:
-                    st.warning("⚠️ Add Brother 1 phone number in Settings.")
-                    
             with w_col2:
                 if clean_p2:
                     wa_link_2 = f"https://wa.me/{clean_p2}?text={encoded_text}"
                     st.markdown(f'<a href="{wa_link_2}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">💬 Send to {st.session_state.brother_2_name}</button></a>', unsafe_allow_html=True)
-                else:
-                    st.warning("⚠️ Add Brother 2 phone number in Settings.")
         else:
-            st.success("✅ All item stock levels are optimal.")
+            st.success("✅ All stock levels are sufficient.")
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & SOLD ITEMS
+# SCREEN 3: 🏷️ PRICING & ITEMS MASTER
 # ==========================================
-elif nav_option == "🏷️ Pricing & Sold Items":
-    st.title("🏷️ Item Pricing & Daily Sold Items Entry")
+elif nav_option == "🏷️ Pricing & Items Master":
+    st.title("🏷️ Item Pricing & Master Catalog")
+    st.write("Add new menu items, select measurement units (Pieces/KG/Liters), and set prices.")
     
-    # Section 1: Pricing Table Management
-    st.subheader("📋 Price List Management")
-    edited_prices = st.data_editor(st.session_state.prices_data, num_rows="dynamic", key="price_box", use_container_width=True)
-    if st.button("💾 Save Pricing List"):
+    price_column_config = {
+        "Unit": st.column_config.SelectboxColumn("Unit", options=["Pieces", "KG", "Grams", "Liters", "Portion"], required=True),
+        "Purchase Price": st.column_config.NumberColumn("Purchase Price (Rs.)", format="Rs. %.2f"),
+        "Selling Price": st.column_config.NumberColumn("Selling Price (Rs.)", format="Rs. %.2f")
+    }
+
+    edited_prices = st.data_editor(st.session_state.prices_data, column_config=price_column_config, num_rows="dynamic", key="price_box", use_container_width=True)
+    
+    if st.button("💾 Save Item Pricing"):
         st.session_state.prices_data = edited_prices
         edited_prices.to_csv(PRICES_FILE, index=False)
-        st.success("✅ Price list saved successfully!")
-
-    st.markdown("---")
-
-    # Section 2: Daily Sold Items Entry
-    st.subheader("🛒 Daily Sold Items Entry")
-    sale_date = st.date_input("Select Sales Date", date.today(), key="sold_date")
-    
-    # Sync prices table with sold quantity column
-    pricing_df = st.session_state.prices_data.copy()
-    if "Sold Quantity" not in pricing_df.columns:
-        pricing_df["Sold Quantity"] = 0
-
-    edited_sales = st.data_editor(pricing_df, key="sold_items_box", use_container_width=True)
-    
-    if st.button("💾 Save Daily Sold Items"):
-        edited_sales["Date"] = str(sale_date)
-        
-        if os.path.exists(SALES_FILE):
-            existing_sales = pd.read_csv(SALES_FILE)
-            existing_sales = existing_sales[existing_sales["Date"] != str(sale_date)]
-            updated_sales = pd.concat([existing_sales, edited_sales], ignore_index=True)
-        else:
-            updated_sales = edited_sales
-            
-        updated_sales.to_csv(SALES_FILE, index=False)
-        st.success(f"✅ Sold items data saved for date {sale_date}!")
-
-    st.markdown("---")
-
-    # Section 3: Daily Expenses
-    st.subheader("💸 Daily Expenses Entry")
-    exp_date = st.date_input("Expense Date", date.today(), key="exp_date_pricing")
-    default_expenses = pd.DataFrame([{"Expense Reason": "Gas / Electricity", "Amount": 1500.0}, {"Expense Reason": "Raw Material Cash", "Amount": 2000.0}])
-    edited_expenses = st.data_editor(default_expenses, num_rows="dynamic", key="exp_box", use_container_width=True)
-
-    if st.button("💾 Save Today's Expenses"):
-        edited_expenses["Date"] = str(exp_date)
-        if os.path.exists(EXPENSES_FILE):
-            exp_df = pd.read_csv(EXPENSES_FILE)
-            exp_df = exp_df[exp_df["Date"] != str(exp_date)]
-            exp_updated = pd.concat([exp_df, edited_expenses], ignore_index=True)
-        else:
-            exp_updated = edited_expenses
-        exp_updated.to_csv(EXPENSES_FILE, index=False)
-        st.success(f"✅ Expenses saved for date {exp_date}!")
+        st.success("✅ Master Item Prices saved!")
 
 # ==========================================
 # SCREEN 4: 📈 PROFIT & LOSS REPORTS
 # ==========================================
 elif nav_option == "📈 Profit & Loss Reports":
-    st.title("📈 Monthly & Yearly Profit Reports")
-    st.write("Complete breakdown based on sales revenue, raw material cost, and daily expenses:")
+    st.title("📈 Profit & Loss Financial Reports")
     
-    # Priority check for sales file or inventory file
-    sales_file_to_use = SALES_FILE if os.path.exists(SALES_FILE) else (INVENTORY_FILE if os.path.exists(INVENTORY_FILE) else None)
-    
-    if sales_file_to_use:
-        inv_records = pd.read_csv(sales_file_to_use)
-        
-        # If using inventory file, map 'Sale' column to 'Sold Quantity'
-        if "Sold Quantity" not in inv_records.columns and "Sale" in inv_records.columns:
-            inv_records["Sold Quantity"] = inv_records["Sale"]
-            
+    if os.path.exists(INVENTORY_FILE):
+        inv_records = pd.read_csv(INVENTORY_FILE)
         prices_df = st.session_state.prices_data
         
-        merged_rep = pd.merge(inv_records, prices_df, on="Item Name", how="left", suffixes=('', '_y')).fillna(0)
+        merged_rep = pd.merge(inv_records, prices_df, on="Item Name", how="left", suffixes=('', '_m')).fillna(0)
         
-        # Priority check for prices
-        purchase_price_col = "Purchase Price" if "Purchase Price" in merged_rep.columns else "Purchase Price_y"
-        selling_price_col = "Selling Price" if "Selling Price" in merged_rep.columns else "Selling Price_y"
+        p_price_col = "Purchase Price" if "Purchase Price" in merged_rep.columns else "Purchase Price_m"
+        s_price_col = "Selling Price" if "Selling Price" in merged_rep.columns else "Selling Price_m"
         
-        merged_rep["Revenue"] = merged_rep["Sold Quantity"] * merged_rep[selling_price_col]
-        merged_rep["Cost"] = merged_rep["Sold Quantity"] * merged_rep[purchase_price_col]
-        merged_rep["Gross_Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
+        merged_rep["Revenue"] = merged_rep["Sale"] * merged_rep[s_price_col]
+        merged_rep["Cost"] = merged_rep["Sale"] * merged_rep[p_price_col]
+        merged_rep["Gross Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
         
-        merged_rep["Date_Parsed"] = pd.to_datetime(merged_rep["Date"], errors='coerce')
-        merged_rep["Year"] = merged_rep["Date_Parsed"].dt.year
-        merged_rep["Month"] = merged_rep["Date_Parsed"].dt.strftime("%Y-%m")
+        tot_rev = merged_rep["Revenue"].sum()
+        tot_cost = merged_rep["Cost"].sum()
+        tot_profit = merged_rep["Gross Profit"].sum()
         
-        expenses_records = pd.read_csv(EXPENSES_FILE) if os.path.exists(EXPENSES_FILE) else pd.DataFrame(columns=["Date", "Amount"])
-        if not expenses_records.empty:
-            expenses_records["Date_Parsed"] = pd.to_datetime(expenses_records["Date"], errors='coerce')
-            expenses_records["Year"] = expenses_records["Date_Parsed"].dt.year
-            expenses_records["Month"] = expenses_records["Date_Parsed"].dt.strftime("%Y-%m")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Sales Revenue", f"Rs. {tot_rev:,.2f}")
+        c2.metric("Raw Material Cost", f"Rs. {tot_cost:,.2f}")
+        c3.metric("Estimated Gross Profit", f"Rs. {tot_profit:,.2f}")
         
-        tab1, tab2 = st.tabs(["📅 Monthly Report", "📊 Yearly Report"])
+        st.markdown("---")
+        st.subheader("📋 Sales Breakdown Record")
+        st.dataframe(merged_rep[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Gross Profit"]], use_container_width=True)
         
-        with tab1:
-            st.subheader("Monthly Financial Performance")
-            valid_months = merged_rep["Month"].dropna().unique()
-            if len(valid_months) > 0:
-                selected_month = st.selectbox("Select Month", sorted(valid_months, reverse=True))
-                month_data = merged_rep[merged_rep["Month"] == selected_month]
-                
-                m_revenue = month_data["Revenue"].sum()
-                m_gross_profit = month_data["Gross_Profit"].sum()
-                
-                m_expenses = expenses_records[expenses_records["Month"] == selected_month]["Amount"].sum() if not expenses_records.empty else 0.0
-                m_net_profit = m_gross_profit - m_expenses
-                
-                c1, c2, c3 = st.columns(3)
-                c1.metric(label="Total Sales Revenue", value=f"Rs. {m_revenue:,.2f}")
-                c2.metric(label="Total Expenses", value=f"Rs. {m_expenses:,.2f}")
-                c3.metric(label="Net Profit (Clear)", value=f"Rs. {m_net_profit:,.2f}")
-                
-                st.dataframe(month_data[["Date", "Item Name", "Sold Quantity", "Revenue", "Gross_Profit"]], use_container_width=True)
-            else:
-                st.info("No valid month data available.")
-            
-        with tab2:
-            st.subheader("Yearly Financial Performance")
-            valid_years = merged_rep["Year"].dropna().unique()
-            if len(valid_years) > 0:
-                selected_year = st.selectbox("Select Year", sorted(valid_years, reverse=True))
-                year_data = merged_rep[merged_rep["Year"] == selected_year]
-                
-                y_revenue = year_data["Revenue"].sum()
-                y_gross_profit = year_data["Gross_Profit"].sum()
-                
-                y_expenses = expenses_records[expenses_records["Year"] == selected_year]["Amount"].sum() if not expenses_records.empty else 0.0
-                y_net_profit = y_gross_profit - y_expenses
-                
-                y1, y2, y3 = st.columns(3)
-                y1.metric(label="Total Sales Revenue", value=f"Rs. {y_revenue:,.2f}")
-                y2.metric(label="Total Expenses", value=f"Rs. {y_expenses:,.2f}")
-                y3.metric(label="Net Profit (Clear)", value=f"Rs. {y_net_profit:,.2f}")
-                
-                st.dataframe(year_data[["Month", "Item Name", "Sold Quantity", "Revenue", "Gross_Profit"]], use_container_width=True)
-            else:
-                st.info("No valid year data available.")
+        csv = merged_rep.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Full Sales Report (CSV)", data=csv, file_name="Cheesy_Delights_Report.csv", mime="text/csv")
     else:
-        st.warning("⚠️ No saved sales or inventory records found yet!")
+        st.info("ℹ️ Save daily inventory records first to view profit/loss analytics.")
 
 # ==========================================
 # SCREEN 5: ⚙️ SETTINGS
@@ -360,29 +345,24 @@ elif nav_option == "📈 Profit & Loss Reports":
 else:
     st.title("⚙️ System Settings")
     
-    st.subheader("🔑 Change Login Credentials")
+    st.subheader("🔑 Change Login Password")
     with st.form("auth_form"):
         new_username = st.text_input("New Username", value=saved_user)
         new_password = st.text_input("New Password", value=saved_pass, type="password")
         
-        if st.form_submit_button("Update Credentials"):
-            auth_save = pd.DataFrame({
-                "Key": ["username", "password"],
-                "Value": [new_username, new_password]
-            })
+        if st.form_submit_button("Update Password"):
+            auth_save = pd.DataFrame({"Key": ["username", "password"], "Value": [new_username, new_password]})
             auth_save.to_csv(AUTH_FILE, index=False)
-            st.success("✅ Credentials updated successfully!")
+            st.success("✅ Password updated successfully!")
 
     st.markdown("---")
     st.subheader("💬 WhatsApp Contacts Configuration")
     with st.form("settings_form"):
         b1_name_in = st.text_input("Brother 1 Name", value=st.session_state.brother_1_name)
-        b1_phone_in = st.text_input("Brother 1 WhatsApp (With country code e.g. 923001234567)", value=st.session_state.brother_1_phone)
-        
-        st.markdown("---")
+        b1_phone_in = st.text_input("Brother 1 Phone (e.g. 923001234567)", value=st.session_state.brother_1_phone)
         
         b2_name_in = st.text_input("Brother 2 Name", value=st.session_state.brother_2_name)
-        b2_phone_in = st.text_input("Brother 2 WhatsApp (With country code e.g. 923001234567)", value=st.session_state.brother_2_phone)
+        b2_phone_in = st.text_input("Brother 2 Phone (e.g. 923001234567)", value=st.session_state.brother_2_phone)
         
         if st.form_submit_button("Save WhatsApp Settings"):
             st.session_state.brother_1_name = b1_name_in
@@ -390,9 +370,6 @@ else:
             st.session_state.brother_2_name = b2_name_in
             st.session_state.brother_2_phone = b2_phone_in
             
-            settings_save = pd.DataFrame({
-                "Key": ["b1_name", "b1_phone", "b2_name", "b2_phone"],
-                "Value": [b1_name_in, b1_phone_in, b2_name_in, b2_phone_in]
-            })
+            settings_save = pd.DataFrame({"Key": ["b1_name", "b1_phone", "b2_name", "b2_phone"], "Value": [b1_name_in, b1_phone_in, b2_name_in, b2_phone_in]})
             settings_save.to_csv(SETTINGS_FILE, index=False)
-            st.success("✅ WhatsApp details saved!")
+            st.success("✅ Contacts Saved!")
