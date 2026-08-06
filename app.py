@@ -262,7 +262,7 @@ elif nav_option == "📦 Daily Inventory & Stock":
                     st.rerun()
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & ITEMS MASTER (UPDATED COLUMNS & TOTALS)
+# SCREEN 3: 🏷️ PRICING & ITEMS MASTER (NO DELETE BUTTON)
 # ==========================================
 elif nav_option == "🏷️ Pricing & Items Master":
     st.title("🏷️ Item Pricing & Master Catalog")
@@ -294,6 +294,7 @@ elif nav_option == "🏷️ Pricing & Items Master":
         if c not in master_df.columns:
             master_df[c] = 0.0
 
+    # num_rows="fixed" removes row addition/deletion capability
     edited_prices = st.data_editor(
         master_df[display_cols],
         column_config={
@@ -301,7 +302,7 @@ elif nav_option == "🏷️ Pricing & Items Master":
             "Sold Item": st.column_config.NumberColumn("Sold Item", disabled=True, format="%.2f"),
             "Total Item": st.column_config.NumberColumn("Total Item", disabled=True, format="%.2f")
         },
-        num_rows="dynamic",
+        num_rows="fixed",
         key="price_box_custom",
         use_container_width=True
     )
