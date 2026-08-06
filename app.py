@@ -262,24 +262,68 @@ elif nav_option == "📦 Daily Inventory & Stock":
                     st.rerun()
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & ITEMS MASTER
+# SCREEN 3: 🏷️ PRICING & ITEMS MASTER (UPDATED COLUMNS & TOTALS)
 # ==========================================
 elif nav_option == "🏷️ Pricing & Items Master":
     st.title("🏷️ Item Pricing & Master Catalog")
-    st.write("Manage menu items, units, and set purchase/selling rates:")
-    
+    st.write("Manage menu items and view stock/sales totals:")
+
     price_column_config = {
-        "Unit": st.column_config.SelectboxColumn("Unit", options=["Pieces", "KG", "Grams", "Liters", "Portion"], required=True),
-        "Purchase Price": st.column_config.NumberColumn("Purchase Price (Rs.)", format="Rs. %.2f"),
-        "Selling Price": st.column_config.NumberColumn("Selling Price (Rs.)", format="Rs. %.2f")
+        "Item Name": st.column_config.TextColumn("Item Name", required=True),
+        "Purchase Price": st.column_config.NumberColumn("Purchase Price (Rs.)", format="Rs. %.2f", min_value=0.0),
+        "Selling Price": st.column_config.NumberColumn("Selling Price (Rs.)", format="Rs. %.2f", min_value=0.0),
     }
 
-    edited_prices = st.data_editor(st.session_state.prices_data, column_config=price_column_config, num_rows="dynamic", key="price_box", use_container_width=True)
+    sold_dict = {}
+    total_stock_dict = {}
+    if os.path.exists(INVENTORY_FILE):
+        inv_df = pd.read_csv(INVENTORY_FILE)
+        if not inv_df.empty and "Item Name" in inv_df.columns:
+            if "Sale" in inv_df.columns:
+                sold_dict = inv_df.groupby("Item Name")["Sale"].sum().to_dict()
+            if "Total Stock" in inv_df.columns:
+                total_stock_dict = inv_df.groupby("Item Name")["Total Stock"].sum().to_dict()
+
+    master_df = st.session_state.prices_data.copy()
+    master_df["Sold Item"] = master_df["Item Name"].map(sold_dict).fillna(0.0)
+    master_df["Total Item"] = master_df["Item Name"].map(total_stock_dict).fillna(0.0)
+
+    display_cols = ["Item Name", "Sold Item", "Total Item", "Purchase Price", "Selling Price"]
     
+    for c in display_cols:
+        if c not in master_df.columns:
+            master_df[c] = 0.0
+
+    edited_prices = st.data_editor(
+        master_df[display_cols],
+        column_config={
+            **price_column_config,
+            "Sold Item": st.column_config.NumberColumn("Sold Item", disabled=True, format="%.2f"),
+            "Total Item": st.column_config.NumberColumn("Total Item", disabled=True, format="%.2f")
+        },
+        num_rows="dynamic",
+        key="price_box_custom",
+        use_container_width=True
+    )
+
+    if not edited_prices.empty:
+        tot_sold = edited_prices["Sold Item"].sum()
+        tot_items = edited_prices["Total Item"].sum()
+        tot_purchase = edited_prices["Purchase Price"].sum()
+        tot_selling = edited_prices["Selling Price"].sum()
+
+        st.markdown("---")
+        st.subheader("📊 Totals Summary")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total Sold Items", f"{tot_sold:,.2f}")
+        m2.metric("Total Stock Items", f"{tot_items:,.2f}")
+        m3.metric("Total Purchase Rate", f"Rs. {tot_purchase:,.2f}")
+        m4.metric("Total Selling Rate", f"Rs. {tot_selling:,.2f}")
+
     if st.button("💾 Save Item Pricing"):
-        st.session_state.prices_data = edited_prices
-        edited_prices.to_csv(PRICES_FILE, index=False)
-        st.success("✅ Master Item Prices saved!")
+        st.session_state.prices_data = edited_prices[["Item Name", "Purchase Price", "Selling Price"]]
+        st.session_state.prices_data.to_csv(PRICES_FILE, index=False)
+        st.success("✅ Pricing saved successfully!")
 
 # ==========================================
 # SCREEN 4: 📈 PROFIT & LOSS REPORTS
