@@ -262,7 +262,7 @@ elif nav_option == "📦 Daily Inventory & Stock":
                     st.rerun()
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & ITEMS MASTER (WITH ADD/DELETE ROW ENABLED)
+# SCREEN 3: 🏷️ PRICING & ITEMS MASTER (WITH SAVE & CLEAR/DELETE BUTTONS)
 # ==========================================
 elif nav_option == "🏷️ Pricing & Items Master":
     st.title("🏷️ Item Pricing & Master Catalog")
@@ -294,7 +294,6 @@ elif nav_option == "🏷️ Pricing & Items Master":
         if c not in master_df.columns:
             master_df[c] = 0.0
 
-    # num_rows="dynamic" allows adding new items & deleting rows easily
     edited_prices = st.data_editor(
         master_df[display_cols],
         column_config={
@@ -321,10 +320,22 @@ elif nav_option == "🏷️ Pricing & Items Master":
         m3.metric("Total Purchase Rate", f"Rs. {tot_purchase:,.2f}")
         m4.metric("Total Selling Rate", f"Rs. {tot_selling:,.2f}")
 
-    if st.button("💾 Save Item Pricing", type="primary"):
-        st.session_state.prices_data = edited_prices[["Item Name", "Purchase Price", "Selling Price"]].dropna(subset=["Item Name"])
-        st.session_state.prices_data.to_csv(PRICES_FILE, index=False)
-        st.success("✅ Pricing saved successfully!")
+    # Save and Delete / Clear All Buttons (Side-by-Side)
+    col_pr1, col_pr2 = st.columns([2, 1])
+    
+    with col_pr1:
+        if st.button("💾 Save Item Pricing", type="primary"):
+            st.session_state.prices_data = edited_prices[["Item Name", "Purchase Price", "Selling Price"]].dropna(subset=["Item Name"])
+            st.session_state.prices_data.to_csv(PRICES_FILE, index=False)
+            st.success("✅ Pricing saved successfully!")
+
+    with col_pr2:
+        if st.button("🗑️ Delete / Clear All Pricing Data", type="secondary"):
+            empty_prices = pd.DataFrame(columns=["Item Name", "Purchase Price", "Selling Price", "Unit"])
+            st.session_state.prices_data = empty_prices
+            empty_prices.to_csv(PRICES_FILE, index=False)
+            st.success("🗑️ Pricing data cleared successfully!")
+            st.rerun()
 
 # ==========================================
 # SCREEN 4: 📈 PROFIT & LOSS REPORTS
@@ -336,7 +347,6 @@ elif nav_option == "📈 Profit & Loss Reports":
         inv_records = pd.read_csv(INVENTORY_FILE)
         prices_df = st.session_state.prices_data
         
-        # Merge prices dynamically with saved inventory
         merged_rep = pd.merge(inv_records, prices_df, on="Item Name", how="left", suffixes=('', '_m')).fillna(0)
         
         p_price_col = "Purchase Price" if "Purchase Price" in merged_rep.columns else "Purchase Price_m"
