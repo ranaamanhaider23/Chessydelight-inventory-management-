@@ -7,7 +7,7 @@ import os
 st.set_page_config(page_title="Cheesy Delights | Restaurant Manager", layout="wide", page_icon="🍕")
 
 # ==========================================
-# 🎨 CUSTOM CSS FOR EASY TABLE VIEW & TOUCH-FRIENDLY UI
+# 🎨 CUSTOM CSS
 # ==========================================
 st.markdown("""
     <style>
@@ -29,7 +29,6 @@ EXPENSES_FILE = "expenses_records.csv"
 SETTINGS_FILE = "settings.csv"
 AUTH_FILE = "auth_settings.csv"
 PRICES_FILE = "prices_settings.csv"
-SALES_FILE = "daily_sales_records.csv"
 
 # ==========================================
 # 🔐 PERSISTENT AUTHENTICATION SYSTEM
@@ -79,17 +78,17 @@ if 'brother_1_phone' not in st.session_state: st.session_state.brother_1_phone =
 if 'brother_2_name' not in st.session_state: st.session_state.brother_2_name = b2_name_def
 if 'brother_2_phone' not in st.session_state: st.session_state.brother_2_phone = str(b2_phone_def)
 
-# Sync Pricing Data with Unit support (Pieces, KG, Grams, Liters, Portions)
+# 1. INITIAL PRICES SET TO 0.0
 if os.path.exists(PRICES_FILE):
     st.session_state.prices_data = pd.read_csv(PRICES_FILE)
     if "Unit" not in st.session_state.prices_data.columns:
         st.session_state.prices_data["Unit"] = "Pieces"
 else:
     st.session_state.prices_data = pd.DataFrame([
-        {"Item Name": "Zinger Burger", "Unit": "Pieces", "Purchase Price": 250.0, "Selling Price": 450.0},
-        {"Item Name": "French Fries (Large)", "Unit": "Portion", "Purchase Price": 80.0, "Selling Price": 180.0},
-        {"Item Name": "Mozzarella Cheese", "Unit": "KG", "Purchase Price": 1200.0, "Selling Price": 1600.0},
-        {"Item Name": "Chicken Meat", "Unit": "KG", "Purchase Price": 600.0, "Selling Price": 800.0}
+        {"Item Name": "Zinger Burger", "Unit": "Pieces", "Purchase Price": 0.0, "Selling Price": 0.0},
+        {"Item Name": "French Fries (Large)", "Unit": "Portion", "Purchase Price": 0.0, "Selling Price": 0.0},
+        {"Item Name": "Mozzarella Cheese", "Unit": "KG", "Purchase Price": 0.0, "Selling Price": 0.0},
+        {"Item Name": "Chicken Meat", "Unit": "KG", "Purchase Price": 0.0, "Selling Price": 0.0}
     ])
 
 # ==========================================
@@ -114,7 +113,7 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# SCREEN 1: 🏠 DASHBOARD OVERVIEW
+# SCREEN 1: 🏠 DASHBOARD OVERVIEW (RESET TO 0)
 # ==========================================
 if nav_option == "🏠 Dashboard Overview":
     st.title("🍕 Cheesy Delights - Dashboard")
@@ -134,16 +133,24 @@ if nav_option == "🏠 Dashboard Overview":
             
             st.dataframe(latest_df, use_container_width=True)
         else:
-            st.dataframe(saved_inv, use_container_width=True)
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Items Tracked", 0)
+            m2.metric("Total Sales Count", "0.00")
+            m3.metric("Total Wastage Count", "0.00")
+            st.info("ℹ️ Saved record is empty.")
     else:
+        # 3. HOME SCREEN AMOUNT SET TO ZERO
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Items Tracked", 0)
+        m2.metric("Total Sales Count", "0.00")
+        m3.metric("Total Wastage Count", "0.00")
         st.info("ℹ️ No inventory records saved yet. Start entering stock from the Daily Inventory tab!")
 
 # ==========================================
-# SCREEN 2: 📦 EASY DAILY INVENTORY (KG & DECIMAL SUPPORT)
+# SCREEN 2: 📦 DAILY INVENTORY & STOCK
 # ==========================================
 elif nav_option == "📦 Daily Inventory & Stock":
     st.title("📦 Easy Daily Inventory Record")
-    st.caption("✨ Dynamic support for Pieces, KG, Grams, Liters & Portions with automatic decimal stock calculation.")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -166,7 +173,6 @@ elif nav_option == "📦 Daily Inventory & Stock":
     if not saved_data_found:
         price_df = st.session_state.prices_data.copy()
         
-        # Check Yesterday's Closing Stock to Auto-Fill Today's Opening Stock
         yesterday_date = str(selected_date - timedelta(days=1))
         yesterday_stock = {}
         if not existing_df.empty and "Date" in existing_df.columns:
@@ -190,20 +196,17 @@ elif nav_option == "📦 Daily Inventory & Stock":
                 "Discount": 0.0, 
                 "Return": 0.0, 
                 "Wastage": 0.0,
-                "Min Stock Limit": 5.0 if unit_val == "KG" else 10.0
+                "Min Stock Limit": 0.0
             })
         default_inv = pd.DataFrame(rows)
 
-    # Columns list to ensure clean view
     col_order = ["Item Name", "Unit", "Opening", "Additional", "Sale", "Discount", "Return", "Wastage", "Min Stock Limit"]
     for col in col_order:
         if col not in default_inv.columns:
             default_inv[col] = 0.0
 
     st.subheader("📝 Edit Inventory Sheet")
-    st.info("💡 **KG Tip:** Aap decimal (maslan `1.5` KG ya `0.25` KG) enter kar sakte hain.")
     
-    # Column configuration for flexible dropdowns/decimals
     column_config = {
         "Unit": st.column_config.SelectboxColumn("Unit", options=["Pieces", "KG", "Grams", "Liters", "Portion"], required=True),
         "Opening": st.column_config.NumberColumn("Opening", step=0.1, format="%.2f"),
@@ -226,7 +229,6 @@ elif nav_option == "📦 Daily Inventory & Stock":
     if not edited_inventory.empty:
         df = edited_inventory.copy()
         
-        # 🤖 AUTOMATIC CALCULATIONS WITH DECIMALS
         df["Total Stock"] = df["Opening"] + df["Additional"]
         df["Net Sold"] = df["Sale"] - df["Discount"]
         df["Actual"] = df["Total Stock"] - df["Net Sold"] + df["Return"] - df["Wastage"]
@@ -238,56 +240,36 @@ elif nav_option == "📦 Daily Inventory & Stock":
         summary_cols = ["Item Name", "Unit", "Opening", "Additional", "Sale", "Return", "Wastage", "Actual", "Min Stock Limit"]
         st.dataframe(df[summary_cols], use_container_width=True)
 
-        if st.button("💾 Save Inventory Record", type="primary"):
-            if os.path.exists(INVENTORY_FILE):
-                full_df = pd.read_csv(INVENTORY_FILE)
-                full_df = full_df[~((full_df["Date"] == str(selected_date)) & (full_df["Shift"] == shift))]
-                updated_df = pd.concat([full_df, df], ignore_index=True)
-            else:
-                updated_df = df
-            
-            updated_df.to_csv(INVENTORY_FILE, index=False)
-            st.success("✅ Today's inventory saved successfully!")
-            st.rerun()
+        col_sv1, col_sv2 = st.columns([2, 1])
+        with col_sv1:
+            if st.button("💾 Save Inventory Record", type="primary"):
+                if os.path.exists(INVENTORY_FILE):
+                    full_df = pd.read_csv(INVENTORY_FILE)
+                    full_df = full_df[~((full_df["Date"] == str(selected_date)) & (full_df["Shift"] == shift))]
+                    updated_df = pd.concat([full_df, df], ignore_index=True)
+                else:
+                    updated_df = df
+                
+                updated_df.to_csv(INVENTORY_FILE, index=False)
+                st.success("✅ Today's inventory saved successfully!")
+                st.rerun()
 
-    # 📱 WHATSAPP LOW STOCK ALERT
-    st.markdown("---")
-    st.subheader("📲 WhatsApp Stock Demand Generator")
-    
-    if not edited_inventory.empty:
-        demand_df = df[df["Actual"] <= df["Min Stock Limit"]]
-        
-        if not demand_df.empty:
-            st.warning("⚠️ Some items are running low on stock!")
-            demand_text = f"--- CHEESY DELIGHTS STOCK DEMAND ({selected_date}) ---\n"
-            for index, row in demand_df.iterrows():
-                order_qty = round((row["Min Stock Limit"] - row["Actual"]) + (2.0 if row["Unit"] == "KG" else 10.0), 2)
-                demand_text += f"• {row['Item Name']} | Current: {row['Actual']} {row['Unit']} | Order: {order_qty} {row['Unit']}\n"
-            
-            final_demand_text = st.text_area("Order List Preview:", value=demand_text, height=120)
-            encoded_text = urllib.parse.quote(final_demand_text)
-            
-            w_col1, w_col2 = st.columns(2)
-            clean_p1 = str(st.session_state.brother_1_phone).replace('+', '').replace(' ', '').replace('-', '')
-            clean_p2 = str(st.session_state.brother_2_phone).replace('+', '').replace(' ', '').replace('-', '')
-
-            with w_col1:
-                if clean_p1:
-                    wa_link_1 = f"https://wa.me/{clean_p1}?text={encoded_text}"
-                    st.markdown(f'<a href="{wa_link_1}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">💬 Send to {st.session_state.brother_1_name}</button></a>', unsafe_allow_html=True)
-            with w_col2:
-                if clean_p2:
-                    wa_link_2 = f"https://wa.me/{clean_p2}?text={encoded_text}"
-                    st.markdown(f'<a href="{wa_link_2}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:10px 20px; border-radius:5px; font-weight:bold; cursor:pointer;">💬 Send to {st.session_state.brother_2_name}</button></a>', unsafe_allow_html=True)
-        else:
-            st.success("✅ All stock levels are sufficient.")
+        # DAILY RECORD DELETE FEATURE
+        with col_sv2:
+            if saved_data_found:
+                if st.button("🗑️ Delete Today's Saved Record", type="secondary"):
+                    full_df = pd.read_csv(INVENTORY_FILE)
+                    full_df = full_df[~((full_df["Date"] == str(selected_date)) & (full_df["Shift"] == shift))]
+                    full_df.to_csv(INVENTORY_FILE, index=False)
+                    st.success(f"🗑️ Deleted inventory record for {selected_date} ({shift})")
+                    st.rerun()
 
 # ==========================================
 # SCREEN 3: 🏷️ PRICING & ITEMS MASTER
 # ==========================================
 elif nav_option == "🏷️ Pricing & Items Master":
     st.title("🏷️ Item Pricing & Master Catalog")
-    st.write("Add new menu items, select measurement units (Pieces/KG/Liters), and set prices.")
+    st.write("Manage menu items, units, and set purchase/selling rates:")
     
     price_column_config = {
         "Unit": st.column_config.SelectboxColumn("Unit", options=["Pieces", "KG", "Grams", "Liters", "Portion"], required=True),
@@ -303,7 +285,7 @@ elif nav_option == "🏷️ Pricing & Items Master":
         st.success("✅ Master Item Prices saved!")
 
 # ==========================================
-# SCREEN 4: 📈 PROFIT & LOSS REPORTS
+# SCREEN 4: 📈 PROFIT & LOSS REPORTS (MONTHLY & YEARLY EXPORT + DELETE)
 # ==========================================
 elif nav_option == "📈 Profit & Loss Reports":
     st.title("📈 Profit & Loss Financial Reports")
@@ -321,21 +303,75 @@ elif nav_option == "📈 Profit & Loss Reports":
         merged_rep["Cost"] = merged_rep["Sale"] * merged_rep[p_price_col]
         merged_rep["Gross Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
         
-        tot_rev = merged_rep["Revenue"].sum()
-        tot_cost = merged_rep["Cost"].sum()
-        tot_profit = merged_rep["Gross Profit"].sum()
+        merged_rep["Date_Parsed"] = pd.to_datetime(merged_rep["Date"], errors='coerce')
+        merged_rep["Year"] = merged_rep["Date_Parsed"].dt.year
+        merged_rep["Month"] = merged_rep["Date_Parsed"].dt.strftime("%Y-%m")
         
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total Sales Revenue", f"Rs. {tot_rev:,.2f}")
-        c2.metric("Raw Material Cost", f"Rs. {tot_cost:,.2f}")
-        c3.metric("Estimated Gross Profit", f"Rs. {tot_profit:,.2f}")
+        tab_m, tab_y, tab_d = st.tabs(["📅 Monthly Report", "📊 Yearly Report", "🗑️ Manage Daily Records"])
         
-        st.markdown("---")
-        st.subheader("📋 Sales Breakdown Record")
-        st.dataframe(merged_rep[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Gross Profit"]], use_container_width=True)
-        
-        csv = merged_rep.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 Download Full Sales Report (CSV)", data=csv, file_name="Cheesy_Delights_Report.csv", mime="text/csv")
+        # 2. MONTHLY REPORT & EXPORT
+        with tab_m:
+            st.subheader("Monthly Profit & Loss Summary")
+            valid_months = merged_rep["Month"].dropna().unique()
+            if len(valid_months) > 0:
+                selected_month = st.selectbox("Select Month", sorted(valid_months, reverse=True))
+                month_data = merged_rep[merged_rep["Month"] == selected_month]
+                
+                m_rev = month_data["Revenue"].sum()
+                m_cost = month_data["Cost"].sum()
+                m_profit = month_data["Gross Profit"].sum()
+                
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Total Monthly Revenue", f"Rs. {m_rev:,.2f}")
+                c2.metric("Total Monthly Cost", f"Rs. {m_cost:,.2f}")
+                c3.metric("Monthly Gross Profit", f"Rs. {m_profit:,.2f}")
+                
+                st.dataframe(month_data[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Gross Profit"]], use_container_width=True)
+                
+                # SAVE / DOWNLOAD MONTHLY REPORT
+                m_csv = month_data.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Save/Download Monthly Report (CSV)", data=m_csv, file_name=f"Monthly_Report_{selected_month}.csv", mime="text/csv")
+            else:
+                st.info("No monthly records found.")
+                
+        # 2. YEARLY REPORT & EXPORT
+        with tab_y:
+            st.subheader("Yearly Profit & Loss Summary")
+            valid_years = merged_rep["Year"].dropna().unique()
+            if len(valid_years) > 0:
+                selected_year = st.selectbox("Select Year", sorted(valid_years, reverse=True))
+                year_data = merged_rep[merged_rep["Year"] == selected_year]
+                
+                y_rev = year_data["Revenue"].sum()
+                y_cost = year_data["Cost"].sum()
+                y_profit = year_data["Gross Profit"].sum()
+                
+                y1, y2, y3 = st.columns(3)
+                y1.metric("Total Yearly Revenue", f"Rs. {y_rev:,.2f}")
+                y2.metric("Total Yearly Cost", f"Rs. {y_cost:,.2f}")
+                y3.metric("Yearly Gross Profit", f"Rs. {y_profit:,.2f}")
+                
+                st.dataframe(year_data[["Month", "Date", "Item Name", "Unit", "Sale", "Revenue", "Gross Profit"]], use_container_width=True)
+                
+                # SAVE / DOWNLOAD YEARLY REPORT
+                y_csv = year_data.to_csv(index=False).encode('utf-8')
+                st.download_button("📥 Save/Download Yearly Report (CSV)", data=y_csv, file_name=f"Yearly_Report_{selected_year}.csv", mime="text/csv")
+            else:
+                st.info("No yearly records found.")
+                
+        # 2. DAILY RECORD DELETE SECTION
+        with tab_d:
+            st.subheader("🗑️ Delete Specific Daily Inventory Entry")
+            all_dates = sorted(inv_records["Date"].dropna().unique(), reverse=True)
+            if len(all_dates) > 0:
+                del_date = st.selectbox("Select Date to Delete Record", all_dates)
+                if st.button(f"🚨 Confirm Delete Record for {del_date}", type="primary"):
+                    inv_records = inv_records[inv_records["Date"] != str(del_date)]
+                    inv_records.to_csv(INVENTORY_FILE, index=False)
+                    st.success(f"✅ Record for date {del_date} deleted successfully!")
+                    st.rerun()
+            else:
+                st.info("No records available to delete.")
     else:
         st.info("ℹ️ Save daily inventory records first to view profit/loss analytics.")
 
