@@ -317,10 +317,13 @@ elif nav_option == "📦 All Inventory & Daily Entry":
   def update_master_state():
     if "inv_master_box" in st.session_state:
       val = st.session_state["inv_master_box"]
-      if isinstance(val, dict):
-        st.session_state.inventory_master_data = pd.DataFrame(val)
-      elif isinstance(val, pd.DataFrame):
-        st.session_state.inventory_master_data = val
+      try:
+        if isinstance(val, dict):
+          st.session_state.inventory_master_data = pd.DataFrame.from_dict(val)
+        elif isinstance(val, pd.DataFrame):
+          st.session_state.inventory_master_data = val
+      except Exception:
+        pass
 
 
   with st.expander(
@@ -337,7 +340,12 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     if isinstance(edited_inv_master, pd.DataFrame):
       st.session_state.inventory_master_data = edited_inv_master
     elif isinstance(edited_inv_master, dict):
-      st.session_state.inventory_master_data = pd.DataFrame(edited_inv_master)
+      try:
+        st.session_state.inventory_master_data = pd.DataFrame.from_dict(
+            edited_inv_master
+        )
+      except Exception:
+        pass
 
   st.markdown("---")
 
@@ -415,15 +423,23 @@ elif nav_option == "📦 All Inventory & Daily Entry":
   def update_inventory_state():
     if "all_inv_box" in st.session_state:
       val = st.session_state["all_inv_box"]
-      if isinstance(val, dict):
-        st.session_state[record_key] = pd.DataFrame(val)
-      elif isinstance(val, pd.DataFrame):
-        st.session_state[record_key] = val
+      try:
+        if isinstance(val, dict):
+          st.session_state[record_key] = pd.DataFrame.from_dict(val)
+        elif isinstance(val, pd.DataFrame):
+          st.session_state[record_key] = val
+      except Exception:
+        pass
 
 
   # Safety check for dataframe format in session state
   if isinstance(st.session_state[record_key], dict):
-    st.session_state[record_key] = pd.DataFrame(st.session_state[record_key])
+    try:
+      st.session_state[record_key] = pd.DataFrame.from_dict(
+          st.session_state[record_key]
+      )
+    except Exception:
+      pass
 
   edited_inventory = st.data_editor(
       st.session_state[record_key],
@@ -434,7 +450,10 @@ elif nav_option == "📦 All Inventory & Daily Entry":
   )
 
   if isinstance(edited_inventory, dict):
-    edited_inventory = pd.DataFrame(edited_inventory)
+    try:
+      edited_inventory = pd.DataFrame.from_dict(edited_inventory)
+    except Exception:
+      edited_inventory = st.session_state[record_key]
 
   if isinstance(edited_inventory, pd.DataFrame) and not edited_inventory.empty:
     edited_inventory = edited_inventory.dropna(
@@ -580,16 +599,22 @@ elif nav_option == "🏷️ Pricing & Expenses":
   def update_expenses_state():
     if "exp_box" in st.session_state:
       val = st.session_state["exp_box"]
-      if isinstance(val, dict):
-        st.session_state.expenses_df_state = pd.DataFrame(val)
-      elif isinstance(val, pd.DataFrame):
-        st.session_state.expenses_df_state = val
+      try:
+        if isinstance(val, dict):
+          st.session_state.expenses_df_state = pd.DataFrame.from_dict(val)
+        elif isinstance(val, pd.DataFrame):
+          st.session_state.expenses_df_state = val
+      except Exception:
+        pass
 
 
   if isinstance(st.session_state.expenses_df_state, dict):
-    st.session_state.expenses_df_state = pd.DataFrame(
-        st.session_state.expenses_df_state
-    )
+    try:
+      st.session_state.expenses_df_state = pd.DataFrame.from_dict(
+          st.session_state.expenses_df_state
+      )
+    except Exception:
+      pass
 
   edited_expenses = st.data_editor(
       st.session_state.expenses_df_state,
@@ -601,7 +626,12 @@ elif nav_option == "🏷️ Pricing & Expenses":
   if isinstance(edited_expenses, pd.DataFrame):
     st.session_state.expenses_df_state = edited_expenses
   elif isinstance(edited_expenses, dict):
-    st.session_state.expenses_df_state = pd.DataFrame(edited_expenses)
+    try:
+      st.session_state.expenses_df_state = pd.DataFrame.from_dict(
+          edited_expenses
+      )
+    except Exception:
+      pass
 
   if st.button("💾 Save Today's Expenses"):
     if isinstance(edited_expenses, pd.DataFrame) and not edited_expenses.empty:
@@ -660,14 +690,22 @@ elif nav_option == "⚡ Quick Sales (POS)":
   def update_pos_state():
     if "pos_table_editor" in st.session_state:
       val = st.session_state["pos_table_editor"]
-      if isinstance(val, dict):
-        st.session_state.pos_df_state = pd.DataFrame(val)
-      elif isinstance(val, pd.DataFrame):
-        st.session_state.pos_df_state = val
+      try:
+        if isinstance(val, dict):
+          st.session_state.pos_df_state = pd.DataFrame.from_dict(val)
+        elif isinstance(val, pd.DataFrame):
+          st.session_state.pos_df_state = val
+      except Exception:
+        pass
 
 
   if isinstance(st.session_state.pos_df_state, dict):
-    st.session_state.pos_df_state = pd.DataFrame(st.session_state.pos_df_state)
+    try:
+      st.session_state.pos_df_state = pd.DataFrame.from_dict(
+          st.session_state.pos_df_state
+      )
+    except Exception:
+      pass
 
   edited_pos_df = st.data_editor(
       st.session_state.pos_df_state,
@@ -679,7 +717,10 @@ elif nav_option == "⚡ Quick Sales (POS)":
   if isinstance(edited_pos_df, pd.DataFrame):
     st.session_state.pos_df_state = edited_pos_df
   elif isinstance(edited_pos_df, dict):
-    st.session_state.pos_df_state = pd.DataFrame(edited_pos_df)
+    try:
+      st.session_state.pos_df_state = pd.DataFrame.from_dict(edited_pos_df)
+    except Exception:
+      pass
 
   if isinstance(edited_pos_df, pd.DataFrame) and not edited_pos_df.empty:
     df_pos = edited_pos_df.copy()
