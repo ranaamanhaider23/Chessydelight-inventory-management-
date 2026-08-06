@@ -262,7 +262,7 @@ elif nav_option == "📦 Daily Inventory & Stock":
                     st.rerun()
 
 # ==========================================
-# SCREEN 3: 🏷️ PRICING & ITEMS MASTER (WITH SAVE & CLEAR/DELETE BUTTONS)
+# SCREEN 3: 🏷️ PRICING & ITEMS MASTER
 # ==========================================
 elif nav_option == "🏷️ Pricing & Items Master":
     st.title("🏷️ Item Pricing & Master Catalog")
@@ -320,7 +320,7 @@ elif nav_option == "🏷️ Pricing & Items Master":
         m3.metric("Total Purchase Rate", f"Rs. {tot_purchase:,.2f}")
         m4.metric("Total Selling Rate", f"Rs. {tot_selling:,.2f}")
 
-    # Save and Delete / Clear All Buttons (Side-by-Side)
+    # Save and Reset Prices to Zero Buttons (Side-by-Side)
     col_pr1, col_pr2 = st.columns([2, 1])
     
     with col_pr1:
@@ -330,12 +330,13 @@ elif nav_option == "🏷️ Pricing & Items Master":
             st.success("✅ Pricing saved successfully!")
 
     with col_pr2:
-        if st.button("🗑️ Delete / Clear All Pricing Data", type="secondary"):
-            empty_prices = pd.DataFrame(columns=["Item Name", "Purchase Price", "Selling Price", "Unit"])
-            st.session_state.prices_data = empty_prices
-            empty_prices.to_csv(PRICES_FILE, index=False)
-            st.success("🗑️ Pricing data cleared successfully!")
-            st.rerun()
+        if st.button("🗑️ Reset All Prices to Zero", type="secondary"):
+            if not st.session_state.prices_data.empty:
+                st.session_state.prices_data["Purchase Price"] = 0.0
+                st.session_state.prices_data["Selling Price"] = 0.0
+                st.session_state.prices_data.to_csv(PRICES_FILE, index=False)
+                st.success("🗑️ All item prices set to 0.00!")
+                st.rerun()
 
 # ==========================================
 # SCREEN 4: 📈 PROFIT & LOSS REPORTS
