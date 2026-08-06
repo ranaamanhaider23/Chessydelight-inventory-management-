@@ -148,7 +148,11 @@ with st.sidebar:
 # ==========================================
 # DATA FRAMES INITIALIZATION
 # ==========================================
-if "prices_data" not in st.session_state:
+if (
+    "prices_data" not in st.session_state
+    or not isinstance(st.session_state.prices_data, pd.DataFrame)
+    or st.session_state.prices_data.empty
+):
   st.session_state.prices_data = pd.DataFrame([
       {
           "Item Name": "Zinger Burger",
@@ -170,7 +174,11 @@ if "prices_data" not in st.session_state:
       },
   ])
 
-if "inventory_master_data" not in st.session_state:
+if (
+    "inventory_master_data" not in st.session_state
+    or not isinstance(st.session_state.inventory_master_data, pd.DataFrame)
+    or st.session_state.inventory_master_data.empty
+):
   st.session_state.inventory_master_data = pd.DataFrame([
       {
           "Item Name": "Zinger Burger",
@@ -307,7 +315,8 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
 
   def update_master_state():
-    st.session_state.inventory_master_data = st.session_state["inv_master_box"]
+    if "inv_master_box" in st.session_state:
+      st.session_state.inventory_master_data = st.session_state["inv_master_box"]
 
 
   with st.expander(
@@ -321,7 +330,8 @@ elif nav_option == "📦 All Inventory & Daily Entry":
         on_change=update_master_state,
         use_container_width=True,
     )
-    st.session_state.inventory_master_data = edited_inv_master
+    if isinstance(edited_inv_master, pd.DataFrame):
+      st.session_state.inventory_master_data = edited_inv_master
 
   st.markdown("---")
 
@@ -397,7 +407,8 @@ elif nav_option == "📦 All Inventory & Daily Entry":
 
 
   def update_inventory_state():
-    st.session_state[record_key] = st.session_state["all_inv_box"]
+    if "all_inv_box" in st.session_state:
+      st.session_state[record_key] = st.session_state["all_inv_box"]
 
 
   edited_inventory = st.data_editor(
@@ -408,7 +419,7 @@ elif nav_option == "📦 All Inventory & Daily Entry":
       use_container_width=True,
   )
 
-  if not edited_inventory.empty:
+  if isinstance(edited_inventory, pd.DataFrame) and not edited_inventory.empty:
     edited_inventory = edited_inventory.dropna(
         subset=["Item Name"], how="any"
     )
@@ -418,10 +429,9 @@ elif nav_option == "📦 All Inventory & Daily Entry":
     edited_inventory = edited_inventory[
         edited_inventory["Item Name"].astype(str).str.lower() != "none"
     ]
+    st.session_state[record_key] = edited_inventory
 
-  st.session_state[record_key] = edited_inventory
-
-  if not edited_inventory.empty:
+  if isinstance(edited_inventory, pd.DataFrame) and not edited_inventory.empty:
     df = edited_inventory.copy()
     for col in [
         "Opening",
@@ -467,7 +477,7 @@ elif nav_option == "📦 All Inventory & Daily Entry":
   st.markdown("---")
   st.subheader("📦 Demand Box (Send Order via WhatsApp with Units)")
 
-  if not edited_inventory.empty:
+  if isinstance(edited_inventory, pd.DataFrame) and not edited_inventory.empty:
     demand_calc = edited_inventory.copy()
     for col in ["Actual", "Min Stock Limit"]:
       demand_calc[col] = pd.to_numeric(demand_calc[col], errors="coerce").fillna(
@@ -531,7 +541,11 @@ elif nav_option == "🏷️ Pricing & Expenses":
   st.title("💸 Daily Expenses & Categories")
 
   st.subheader("💸 Daily Expenses Box")
-  if "expenses_df_state" not in st.session_state:
+  if (
+      "expenses_df_state" not in st.session_state
+      or not isinstance(st.session_state.expenses_df_state, pd.DataFrame)
+      or st.session_state.expenses_df_state.empty
+  ):
     st.session_state.expenses_df_state = pd.DataFrame([
         {
             "Expense Reason": "Utility / Bills",
@@ -547,7 +561,8 @@ elif nav_option == "🏷️ Pricing & Expenses":
 
 
   def update_expenses_state():
-    st.session_state.expenses_df_state = st.session_state["exp_box"]
+    if "exp_box" in st.session_state:
+      st.session_state.expenses_df_state = st.session_state["exp_box"]
 
 
   edited_expenses = st.data_editor(
@@ -556,34 +571,21 @@ elif nav_option == "🏷️ Pricing & Expenses":
       key="exp_box",
       on_change=update_expenses_state,
       use_container_width=True,
-      column_config={
-          "Category": st.column_config.SelectboxColumn(
-              "Category",
-              help="Select expense category",
-              options=[
-                  "Raw Material",
-                  "Utilities",
-                  "Salaries",
-                  "Rent",
-                  "Maintenance",
-                  "Miscellaneous",
-              ],
-              required=True,
-          )
-      },
   )
-  st.session_state.expenses_df_state = edited_expenses
+  if isinstance(edited_expenses, pd.DataFrame):
+    st.session_state.expenses_df_state = edited_expenses
 
   if st.button("💾 Save Today's Expenses"):
-    edited_expenses["Date"] = str(date.today())
-    if os.path.exists(EXPENSES_FILE):
-      exp_df = pd.read_csv(EXPENSES_FILE)
-      exp_df = exp_df[exp_df["Date"] != str(date.today())]
-      exp_updated = pd.concat([exp_df, edited_expenses], ignore_index=True)
-    else:
-      exp_updated = edited_expenses
-    exp_updated.to_csv(EXPENSES_FILE, index=False)
-    st.success("✅ Expenses saved permanently!")
+    if isinstance(edited_expenses, pd.DataFrame) and not edited_expenses.empty:
+      edited_expenses["Date"] = str(date.today())
+      if os.path.exists(EXPENSES_FILE):
+        exp_df = pd.read_csv(EXPENSES_FILE)
+        exp_df = exp_df[exp_df["Date"] != str(date.today())]
+        exp_updated = pd.concat([exp_df, edited_expenses], ignore_index=True)
+      else:
+        exp_updated = edited_expenses
+      exp_updated.to_csv(EXPENSES_FILE, index=False)
+      st.success("✅ Expenses saved permanently!")
 
   if os.path.exists(EXPENSES_FILE):
     exp_history = pd.read_csv(EXPENSES_FILE)
@@ -608,7 +610,11 @@ elif nav_option == "⚡ Quick Sales (POS)":
       "Select Sale Date", date.today(), key="pos_date_picker"
   )
 
-  if "pos_df_state" not in st.session_state:
+  if (
+      "pos_df_state" not in st.session_state
+      or not isinstance(st.session_state.pos_df_state, pd.DataFrame)
+      or st.session_state.pos_df_state.empty
+  ):
     st.session_state.pos_df_state = pd.DataFrame([
         {
             "Item Name": "Zinger Burger",
@@ -624,7 +630,8 @@ elif nav_option == "⚡ Quick Sales (POS)":
 
 
   def update_pos_state():
-    st.session_state.pos_df_state = st.session_state["pos_table_editor"]
+    if "pos_table_editor" in st.session_state:
+      st.session_state.pos_df_state = st.session_state["pos_table_editor"]
 
 
   edited_pos_df = st.data_editor(
@@ -634,9 +641,10 @@ elif nav_option == "⚡ Quick Sales (POS)":
       on_change=update_pos_state,
       use_container_width=True,
   )
-  st.session_state.pos_df_state = edited_pos_df
+  if isinstance(edited_pos_df, pd.DataFrame):
+    st.session_state.pos_df_state = edited_pos_df
 
-  if not edited_pos_df.empty:
+  if isinstance(edited_pos_df, pd.DataFrame) and not edited_pos_df.empty:
     df_pos = edited_pos_df.copy()
     df_pos["Quantity Sold"] = pd.to_numeric(
         df_pos["Quantity Sold"], errors="coerce"
