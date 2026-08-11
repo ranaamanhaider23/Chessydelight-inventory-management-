@@ -31,7 +31,7 @@ AUTH_FILE = "auth_settings.csv"
 PRICES_FILE = "prices_settings.csv"
 
 # ==========================================
-# 🔐 AUTHENTICATION
+# 🔐 AUTHENTICATION & SETTINGS LOAD
 # ==========================================
 if os.path.exists(AUTH_FILE):
     auth_df = pd.read_csv(AUTH_FILE)
@@ -39,6 +39,14 @@ if os.path.exists(AUTH_FILE):
     saved_pass = str(auth_df.loc[auth_df['Key'] == 'password', 'Value'].values[0]) if 'password' in auth_df['Key'].values else "1234"
 else:
     saved_user, saved_pass = "admin", "1234"
+
+# Load WhatsApp Settings
+if os.path.exists(SETTINGS_FILE):
+    sett_df = pd.read_csv(SETTINGS_FILE)
+    phone_1 = str(sett_df.loc[sett_df['Key'] == 'phone_1', 'Value'].values[0]) if 'phone_1' in sett_df['Key'].values else "923001234567"
+    phone_2 = str(sett_df.loc[sett_df['Key'] == 'phone_2', 'Value'].values[0]) if 'phone_2' in sett_df['Key'].values else "923007654321"
+else:
+    phone_1, phone_2 = "923001234567", "923007654321"
 
 query_params = st.query_params
 if "authenticated" not in st.session_state:
@@ -112,7 +120,6 @@ if nav_option == "🏠 Dashboard Overview":
             
             st.dataframe(latest_df, use_container_width=True)
             
-            # Export Options
             csv_data = latest_df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download Dashboard Report (CSV)",
@@ -306,11 +313,14 @@ elif nav_option == "📦 Daily Inventory & Stock":
         st.dataframe(df[summary_cols], use_container_width=True)
 
         st.markdown("---")
-        # WhatsApp Settings Row
-        col_wa1, col_wa2 = st.columns([2, 2])
-        with col_wa1:
-            target_phone = st.text_input("📱 Target WhatsApp Number (e.g., 923001234567)", value="923001234567")
         
+        # WhatsApp Number Selection from Settings
+        selected_phone_option = st.selectbox(
+            "📱 Select WhatsApp Contact to Send Report:", 
+            [f"Number 1: {phone_1}", f"Number 2: {phone_2}"]
+        )
+        chosen_number = phone_1 if "Number 1" in selected_phone_option else phone_2
+
         col_sv1, col_sv2, col_sv3 = st.columns([1.5, 1.5, 1.5])
         
         with col_sv1:
@@ -327,15 +337,15 @@ elif nav_option == "📦 Daily Inventory & Stock":
                 st.rerun()
 
         with col_sv2:
-            # WhatsApp Dynamic Link Generator
+            # WhatsApp Message Generation
             whatsapp_msg = f"*🍕 Cheesy Delights Inventory Summary ({selected_date} - {shift})*\n\n"
             for _, row in df.iterrows():
                 if row['Sale / Used'] > 0 or row['Remaining Stock (Actual)'] > 0:
                     whatsapp_msg += f"• *{row['Item Name']}*: Used = {row['Sale / Used']} {row['Unit']}, Remaining = {row['Remaining Stock (Actual)']}\n"
             
             encoded_msg = urllib.parse.quote(whatsapp_msg)
-            phone_clean = target_phone.replace("+", "").replace("-", "").strip()
-            whatsapp_url = f"https://wa.me/{phone_clean}?text={encoded_msg}" if phone_clean else f"https://wa.me/?text={encoded_msg}"
+            clean_phone = chosen_number.replace("+", "").replace("-", "").strip()
+            whatsapp_url = f"https://wa.me/{clean_phone}?text={encoded_msg}"
             
             st.markdown(f'<a href="{whatsapp_url}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%;">📲 Share via WhatsApp</button></a>', unsafe_allow_html=True)
 
@@ -505,9 +515,24 @@ elif nav_option == "📈 Profit & Loss Reports":
 # ==========================================
 else:
     st.title("⚙️ System Settings")
+    
+    st.subheader("📱 WhatsApp Phone Numbers Setup")
+    with st.form("whatsapp_form"):
+        new_phone_1 = st.text_input("WhatsApp Number 1 (e.g., 923001234567)", value=phone_1)
+        new_phone_2 = st.text_input("WhatsApp Number 2 (e.g., 923007654321)", value=phone_2)
+        save_wa_btn = st.form_submit_button("💾 Save WhatsApp Numbers")
+        if save_wa_btn:
+            pd.DataFrame({"Key": ["phone_1", "phone_2"], "Value": [new_phone_1, new_phone_2]}).to_csv(SETTINGS_FILE, index=False)
+            st.success("✅ WhatsApp phone numbers updated successfully!")
+            st.rerun()
+
+    st.markdown("---")
+    
+    st.subheader("🔒 Change Password")
     with st.form("auth_form"):
         new_username = st.text_input("New Username", value=saved_user)
         new_password = st.text_input("New Password", value=saved_pass, type="password")
         if st.form_submit_button("Update Password"):
             pd.DataFrame({"Key": ["username", "password"], "Value": [new_username, new_password]}).to_csv(AUTH_FILE, index=False)
             st.success("✅ Password updated successfully!")
+            st.rerun()
