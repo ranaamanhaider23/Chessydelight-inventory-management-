@@ -100,7 +100,7 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# SCREEN 1: 🏠 DASHBOARD OVERVIEW (FIXED)
+# SCREEN 1: 🏠 DASHBOARD OVERVIEW
 # ==========================================
 if nav_option == "🏠 Dashboard Overview":
     st.title("🍕 Cheesy Delights - Dashboard")
@@ -108,24 +108,21 @@ if nav_option == "🏠 Dashboard Overview":
     if os.path.exists(INVENTORY_FILE):
         saved_inv = pd.read_csv(INVENTORY_FILE)
         if not saved_inv.empty and "Date" in saved_inv.columns:
-            # Sab se latest date filter ki ja rahi ha
             latest_date = str(saved_inv["Date"].max())
-            st.info(f"📌 Displaying latest saved inventory snapshot for: **{latest_date}**")
+            st.info(f"📌 Showing latest saved inventory snapshot for date: **{latest_date}**")
             
-            latest_df = saved_inv[saved_inv["Date"] == latest_date].copy()
-            
-            # Key Columns to display cleanly
-            show_cols = ["Item Name", "Unit", "Opening Stock", "New Purchased", "Sale / Used", "Wastage", "Remaining Stock (Actual)"]
-            available_cols = [c for c in show_cols if c in latest_df.columns]
+            latest_df = saved_inv[saved_inv["Date"] == latest_date]
             
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total Unique Items Tracked", len(latest_df["Item Name"].unique()))
-            m2.metric("Total Sales Count Today", float(latest_df["Sale / Used"].sum()) if "Sale / Used" in latest_df.columns else 0.0)
-            m3.metric("Total Wastage Count Today", float(latest_df["Wastage"].sum()) if "Wastage" in latest_df.columns else 0.0)
+            m1.metric("Total Items Tracked", len(latest_df))
             
-            st.dataframe(latest_df[available_cols], use_container_width=True)
+            sales_col = "Sale / Used" if "Sale / Used" in latest_df.columns else "Sale"
+            m2.metric("Total Sales Count", float(latest_df[sales_col].sum()) if sales_col in latest_df.columns else 0.0)
+            m3.metric("Total Wastage Count", float(latest_df["Wastage"].sum()) if "Wastage" in latest_df.columns else 0.0)
             
-            csv_data = latest_df[available_cols].to_csv(index=False).encode('utf-8')
+            st.dataframe(latest_df, use_container_width=True)
+            
+            csv_data = latest_df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download Dashboard Report (CSV)",
                 data=csv_data,
@@ -133,12 +130,12 @@ if nav_option == "🏠 Dashboard Overview":
                 mime="text/csv"
             )
         else:
-            st.info("ℹ️ Saved inventory file is currently empty.")
+            st.info("ℹ️ Saved record is empty.")
     else:
         st.info("ℹ️ No inventory records saved yet.")
 
 # ==========================================
-# SCREEN 2: 🛍️ STOCK PURCHASES
+# SCREEN 2: 🛍️ STOCK PURCHASES (WITH DELETE OPTION)
 # ==========================================
 elif nav_option == "🛍️ Stock Purchases":
     st.title("🛍️ Outside Market Purchases Log")
@@ -200,14 +197,37 @@ elif nav_option == "🛍️ Stock Purchases":
     
     if os.path.exists(PURCHASES_FILE):
         all_p = pd.read_csv(PURCHASES_FILE)
-        day_p = all_p[all_p["Date"] == str(purchase_date)]
         
-        if not day_p.empty:
-            st.dataframe(day_p[["Item Name", "Quantity", "Unit", "Total Purchase Cost", "Vendor/Notes"]], use_container_width=True)
-            tot_day_spend = day_p["Total Purchase Cost"].sum()
-            st.success(f"💰 **Total Expense for Today:** Rs. {tot_day_spend:,.2f}")
+        if not all_p.empty:
+            # Filter rows for selected date
+            day_p_indices = all_p[all_p["Date"] == str(purchase_date)].index
+            
+            if len(day_p_indices) > 0:
+                # Display each purchase record with an individual Delete Button
+                for idx in day_p_indices:
+                    row = all_p.loc[idx]
+                    col_d1, col_d2, col_d3, col_d4, col_d5, col_d6 = st.columns([2, 1, 1, 1.5, 2, 1])
+                    
+                    col_d1.write(f"**{row['Item Name']}**")
+                    col_d2.write(f"{row['Quantity']} {row['Unit']}")
+                    col_d3.write(f"Rs. {row['Total Purchase Cost']:,.2f}")
+                    col_d4.write(f"🏷️ {row['Vendor/Notes'] if pd.notna(row['Vendor/Notes']) else 'N/A'}")
+                    col_d5.write(f"📅 {row['Date']}")
+                    
+                    # Delete Button per row
+                    if col_d6.button("🗑️ Delete", key=f"del_purch_{idx}"):
+                        all_p = all_p.drop(idx)
+                        all_p.to_csv(PURCHASES_FILE, index=False)
+                        st.success(f"🗑️ Deleted purchase entry for '{row['Item Name']}'!")
+                        st.rerun()
+                
+                tot_day_spend = all_p.loc[day_p_indices, "Total Purchase Cost"].sum()
+                st.markdown("---")
+                st.success(f"💰 **Total Expense for Selected Date:** Rs. {tot_day_spend:,.2f}")
+            else:
+                st.info("No purchases recorded for this date yet.")
         else:
-            st.info("No purchases recorded for this date yet.")
+            st.info("No purchases recorded yet.")
 
 # ==========================================
 # SCREEN 3: 📦 DAILY INVENTORY & STOCK
@@ -257,7 +277,8 @@ elif nav_option == "📦 Daily Inventory & Stock":
             yest_df = existing_df[existing_df["Date"] == yesterday_date]
             if not yest_df.empty:
                 for idx, r in yest_df.iterrows():
-                    yesterday_stock[r["Item Name"]] = float(r.get("Remaining Stock (Actual)", 0.0))
+                    val = r.get("Remaining Stock (Actual)", r.get("Actual", 0.0))
+                    yesterday_stock[r["Item Name"]] = float(val)
 
         rows = []
         for item in all_known_items:
@@ -325,7 +346,6 @@ elif nav_option == "📦 Daily Inventory & Stock":
             if st.button("💾 Save Inventory Record", type="primary"):
                 if os.path.exists(INVENTORY_FILE):
                     full_df = pd.read_csv(INVENTORY_FILE)
-                    # Overwrite same date and shift entry if exists
                     full_df = full_df[~((full_df["Date"] == str(selected_date)) & (full_df["Shift"] == shift))]
                     updated_df = pd.concat([full_df, df], ignore_index=True)
                 else:
@@ -410,8 +430,10 @@ elif nav_option == "📈 Profit & Loss Reports":
         p_price_col = "Purchase Price" if "Purchase Price" in merged_rep.columns else "Purchase Price_m"
         s_price_col = "Selling Price" if "Selling Price" in merged_rep.columns else "Selling Price_m"
         
-        merged_rep["Revenue"] = merged_rep["Sale"] * merged_rep[s_price_col]
-        merged_rep["Cost"] = merged_rep["Sale"] * merged_rep[p_price_col]
+        sale_col_rep = "Sale" if "Sale" in merged_rep.columns else "Sale / Used"
+        
+        merged_rep["Revenue"] = merged_rep[sale_col_rep] * merged_rep[s_price_col]
+        merged_rep["Cost"] = merged_rep[sale_col_rep] * merged_rep[p_price_col]
         merged_rep["Gross Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
         merged_rep["Date_dt"] = pd.to_datetime(merged_rep["Date"], errors='coerce')
 
@@ -436,7 +458,7 @@ elif nav_option == "📈 Profit & Loss Reports":
                 m2.metric("Daily Cost", f"Rs. {d_cost:,.2f}")
                 m3.metric("Daily Gross Profit", f"Rs. {d_profit:,.2f}")
                 
-                st.dataframe(daily_data[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
+                st.dataframe(daily_data[["Date", "Shift", "Item Name", "Unit", sale_col_rep, "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
                 
                 col_dl, col_del = st.columns([2, 1])
                 with col_dl:
@@ -471,7 +493,7 @@ elif nav_option == "📈 Profit & Loss Reports":
                 m2.metric("Monthly Cost", f"Rs. {m_cost:,.2f}")
                 m3.metric("Monthly Gross Profit", f"Rs. {m_profit:,.2f}")
                 
-                st.dataframe(monthly_data[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
+                st.dataframe(monthly_data[["Date", "Shift", "Item Name", "Unit", sale_col_rep, "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
                 
                 st.download_button(
                     label="📥 Save Monthly Report (CSV)",
@@ -497,7 +519,7 @@ elif nav_option == "📈 Profit & Loss Reports":
                 m2.metric("Yearly Cost", f"Rs. {y_cost:,.2f}")
                 m3.metric("Yearly Gross Profit", f"Rs. {y_profit:,.2f}")
                 
-                st.dataframe(yearly_data[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
+                st.dataframe(yearly_data[["Date", "Shift", "Item Name", "Unit", sale_col_rep, "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
                 
                 st.download_button(
                     label="📥 Save Yearly Report (CSV)",
