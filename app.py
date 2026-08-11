@@ -44,9 +44,8 @@ else:
 if os.path.exists(SETTINGS_FILE):
     sett_df = pd.read_csv(SETTINGS_FILE)
     phone_1 = str(sett_df.loc[sett_df['Key'] == 'phone_1', 'Value'].values[0]) if 'phone_1' in sett_df['Key'].values else "923001234567"
-    phone_2 = str(sett_df.loc[sett_df['Key'] == 'phone_2', 'Value'].values[0]) if 'phone_2' in sett_df['Key'].values else "923007654321"
 else:
-    phone_1, phone_2 = "923001234567", "923007654321"
+    phone_1 = "923001234567"
 
 query_params = st.query_params
 if "authenticated" not in st.session_state:
@@ -101,26 +100,32 @@ with st.sidebar:
         st.rerun()
 
 # ==========================================
-# SCREEN 1: 🏠 DASHBOARD OVERVIEW
+# SCREEN 1: 🏠 DASHBOARD OVERVIEW (FIXED)
 # ==========================================
 if nav_option == "🏠 Dashboard Overview":
     st.title("🍕 Cheesy Delights - Dashboard")
     
     if os.path.exists(INVENTORY_FILE):
         saved_inv = pd.read_csv(INVENTORY_FILE)
-        latest_date = saved_inv["Date"].max() if "Date" in saved_inv.columns else None
-        if latest_date:
-            st.info(f"📌 Showing latest saved inventory for date: **{latest_date}**")
-            latest_df = saved_inv[saved_inv["Date"] == latest_date]
+        if not saved_inv.empty and "Date" in saved_inv.columns:
+            # Sab se latest date filter ki ja rahi ha
+            latest_date = str(saved_inv["Date"].max())
+            st.info(f"📌 Displaying latest saved inventory snapshot for: **{latest_date}**")
+            
+            latest_df = saved_inv[saved_inv["Date"] == latest_date].copy()
+            
+            # Key Columns to display cleanly
+            show_cols = ["Item Name", "Unit", "Opening Stock", "New Purchased", "Sale / Used", "Wastage", "Remaining Stock (Actual)"]
+            available_cols = [c for c in show_cols if c in latest_df.columns]
             
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total Items Tracked", len(latest_df))
-            m2.metric("Total Sales Count", float(latest_df["Sale"].sum()) if "Sale" in latest_df.columns else 0.0)
-            m3.metric("Total Wastage Count", float(latest_df["Wastage"].sum()) if "Wastage" in latest_df.columns else 0.0)
+            m1.metric("Total Unique Items Tracked", len(latest_df["Item Name"].unique()))
+            m2.metric("Total Sales Count Today", float(latest_df["Sale / Used"].sum()) if "Sale / Used" in latest_df.columns else 0.0)
+            m3.metric("Total Wastage Count Today", float(latest_df["Wastage"].sum()) if "Wastage" in latest_df.columns else 0.0)
             
-            st.dataframe(latest_df, use_container_width=True)
+            st.dataframe(latest_df[available_cols], use_container_width=True)
             
-            csv_data = latest_df.to_csv(index=False).encode('utf-8')
+            csv_data = latest_df[available_cols].to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download Dashboard Report (CSV)",
                 data=csv_data,
@@ -128,7 +133,7 @@ if nav_option == "🏠 Dashboard Overview":
                 mime="text/csv"
             )
         else:
-            st.info("ℹ️ Saved record is empty.")
+            st.info("ℹ️ Saved inventory file is currently empty.")
     else:
         st.info("ℹ️ No inventory records saved yet.")
 
@@ -252,7 +257,7 @@ elif nav_option == "📦 Daily Inventory & Stock":
             yest_df = existing_df[existing_df["Date"] == yesterday_date]
             if not yest_df.empty:
                 for idx, r in yest_df.iterrows():
-                    yesterday_stock[r["Item Name"]] = float(r.get("Actual", 0.0))
+                    yesterday_stock[r["Item Name"]] = float(r.get("Remaining Stock (Actual)", 0.0))
 
         rows = []
         for item in all_known_items:
@@ -320,6 +325,7 @@ elif nav_option == "📦 Daily Inventory & Stock":
             if st.button("💾 Save Inventory Record", type="primary"):
                 if os.path.exists(INVENTORY_FILE):
                     full_df = pd.read_csv(INVENTORY_FILE)
+                    # Overwrite same date and shift entry if exists
                     full_df = full_df[~((full_df["Date"] == str(selected_date)) & (full_df["Shift"] == shift))]
                     updated_df = pd.concat([full_df, df], ignore_index=True)
                 else:
@@ -330,7 +336,6 @@ elif nav_option == "📦 Daily Inventory & Stock":
                 st.rerun()
 
         with col_sv2:
-            # WhatsApp Direct Share Link Generator (Settings mein se phone_1 istemaal hoga)
             whatsapp_msg = f"*🍕 Cheesy Delights Inventory Summary ({selected_date} - {shift})*\n\n"
             for _, row in df.iterrows():
                 if row['Sale / Used'] > 0 or row['Remaining Stock (Actual)'] > 0:
