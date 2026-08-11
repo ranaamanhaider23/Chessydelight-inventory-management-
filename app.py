@@ -40,7 +40,7 @@ if os.path.exists(AUTH_FILE):
 else:
     saved_user, saved_pass = "admin", "1234"
 
-# Load WhatsApp Settings from Settings CSV
+# Load WhatsApp Settings
 if os.path.exists(SETTINGS_FILE):
     sett_df = pd.read_csv(SETTINGS_FILE)
     phone_1 = str(sett_df.loc[sett_df['Key'] == 'phone_1', 'Value'].values[0]) if 'phone_1' in sett_df['Key'].values else "923001234567"
@@ -313,13 +313,6 @@ elif nav_option == "📦 Daily Inventory & Stock":
         st.dataframe(df[summary_cols], use_container_width=True)
 
         st.markdown("---")
-        
-        # Select WhatsApp Number (Settings main save huay huye numbers ma se select karein)
-        selected_phone_option = st.selectbox(
-            "📱 Select WhatsApp Contact:", 
-            [f"Number 1 ({phone_1})", f"Number 2 ({phone_2})"]
-        )
-        chosen_number = phone_1 if "Number 1" in selected_phone_option else phone_2
 
         col_sv1, col_sv2, col_sv3 = st.columns([1.5, 1.5, 1.5])
         
@@ -337,14 +330,14 @@ elif nav_option == "📦 Daily Inventory & Stock":
                 st.rerun()
 
         with col_sv2:
-            # WhatsApp Message Link Generator
+            # WhatsApp Direct Share Link Generator (Settings mein se phone_1 istemaal hoga)
             whatsapp_msg = f"*🍕 Cheesy Delights Inventory Summary ({selected_date} - {shift})*\n\n"
             for _, row in df.iterrows():
                 if row['Sale / Used'] > 0 or row['Remaining Stock (Actual)'] > 0:
                     whatsapp_msg += f"• *{row['Item Name']}*: Used = {row['Sale / Used']} {row['Unit']}, Remaining = {row['Remaining Stock (Actual)']}\n"
             
             encoded_msg = urllib.parse.quote(whatsapp_msg)
-            clean_phone = chosen_number.replace("+", "").replace("-", "").strip()
+            clean_phone = phone_1.replace("+", "").replace("-", "").strip()
             whatsapp_url = f"https://wa.me/{clean_phone}?text={encoded_msg}"
             
             st.markdown(f'<a href="{whatsapp_url}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%;">📲 Share via WhatsApp</button></a>', unsafe_allow_html=True)
@@ -516,14 +509,13 @@ elif nav_option == "📈 Profit & Loss Reports":
 else:
     st.title("⚙️ System Settings")
     
-    st.subheader("📱 WhatsApp Phone Numbers Setup")
+    st.subheader("📱 WhatsApp Phone Number Setup")
     with st.form("whatsapp_form"):
-        new_phone_1 = st.text_input("WhatsApp Number 1 (e.g., 923001234567)", value=phone_1)
-        new_phone_2 = st.text_input("WhatsApp Number 2 (e.g., 923007654321)", value=phone_2)
-        save_wa_btn = st.form_submit_button("💾 Save WhatsApp Numbers")
+        new_phone_1 = st.text_input("WhatsApp Number (e.g., 923001234567)", value=phone_1)
+        save_wa_btn = st.form_submit_button("💾 Save WhatsApp Number")
         if save_wa_btn:
-            pd.DataFrame({"Key": ["phone_1", "phone_2"], "Value": [new_phone_1, new_phone_2]}).to_csv(SETTINGS_FILE, index=False)
-            st.success("✅ WhatsApp phone numbers updated successfully!")
+            pd.DataFrame({"Key": ["phone_1"], "Value": [new_phone_1]}).to_csv(SETTINGS_FILE, index=False)
+            st.success("✅ WhatsApp phone number updated successfully!")
             st.rerun()
 
     st.markdown("---")
