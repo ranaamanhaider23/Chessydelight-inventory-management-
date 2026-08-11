@@ -305,6 +305,12 @@ elif nav_option == "📦 Daily Inventory & Stock":
         summary_cols = ["Item Name", "Unit", "Opening Stock", "New Purchased", "Total Available Stock", "Sale / Used", "Wastage", "Remaining Stock (Actual)"]
         st.dataframe(df[summary_cols], use_container_width=True)
 
+        st.markdown("---")
+        # WhatsApp Settings Row
+        col_wa1, col_wa2 = st.columns([2, 2])
+        with col_wa1:
+            target_phone = st.text_input("📱 Target WhatsApp Number (e.g., 923001234567)", value="923001234567")
+        
         col_sv1, col_sv2, col_sv3 = st.columns([1.5, 1.5, 1.5])
         
         with col_sv1:
@@ -321,14 +327,16 @@ elif nav_option == "📦 Daily Inventory & Stock":
                 st.rerun()
 
         with col_sv2:
-            # WhatsApp Integration Link
+            # WhatsApp Dynamic Link Generator
             whatsapp_msg = f"*🍕 Cheesy Delights Inventory Summary ({selected_date} - {shift})*\n\n"
             for _, row in df.iterrows():
                 if row['Sale / Used'] > 0 or row['Remaining Stock (Actual)'] > 0:
                     whatsapp_msg += f"• *{row['Item Name']}*: Used = {row['Sale / Used']} {row['Unit']}, Remaining = {row['Remaining Stock (Actual)']}\n"
             
             encoded_msg = urllib.parse.quote(whatsapp_msg)
-            whatsapp_url = f"https://wa.me/?text={encoded_msg}"
+            phone_clean = target_phone.replace("+", "").replace("-", "").strip()
+            whatsapp_url = f"https://wa.me/{phone_clean}?text={encoded_msg}" if phone_clean else f"https://wa.me/?text={encoded_msg}"
+            
             st.markdown(f'<a href="{whatsapp_url}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%;">📲 Share via WhatsApp</button></a>', unsafe_allow_html=True)
 
         with col_sv3:
