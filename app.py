@@ -40,7 +40,7 @@ if os.path.exists(AUTH_FILE):
 else:
     saved_user, saved_pass = "admin", "1234"
 
-# Load WhatsApp Settings
+# Load WhatsApp Settings from Settings CSV
 if os.path.exists(SETTINGS_FILE):
     sett_df = pd.read_csv(SETTINGS_FILE)
     phone_1 = str(sett_df.loc[sett_df['Key'] == 'phone_1', 'Value'].values[0]) if 'phone_1' in sett_df['Key'].values else "923001234567"
@@ -314,10 +314,10 @@ elif nav_option == "📦 Daily Inventory & Stock":
 
         st.markdown("---")
         
-        # WhatsApp Number Selection from Settings
+        # Select WhatsApp Number (Settings main save huay huye numbers ma se select karein)
         selected_phone_option = st.selectbox(
-            "📱 Select WhatsApp Contact to Send Report:", 
-            [f"Number 1: {phone_1}", f"Number 2: {phone_2}"]
+            "📱 Select WhatsApp Contact:", 
+            [f"Number 1 ({phone_1})", f"Number 2 ({phone_2})"]
         )
         chosen_number = phone_1 if "Number 1" in selected_phone_option else phone_2
 
@@ -337,7 +337,7 @@ elif nav_option == "📦 Daily Inventory & Stock":
                 st.rerun()
 
         with col_sv2:
-            # WhatsApp Message Generation
+            # WhatsApp Message Link Generator
             whatsapp_msg = f"*🍕 Cheesy Delights Inventory Summary ({selected_date} - {shift})*\n\n"
             for _, row in df.iterrows():
                 if row['Sale / Used'] > 0 or row['Remaining Stock (Actual)'] > 0:
