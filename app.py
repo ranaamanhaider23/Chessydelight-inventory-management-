@@ -59,7 +59,7 @@ if not st.session_state.authenticated:
                 st.error("❌ Incorrect Username or Password!")
     st.stop()
 
-# Load prices
+# Load prices catalog
 if os.path.exists(PRICES_FILE):
     st.session_state.prices_data = pd.read_csv(PRICES_FILE)
     if "Unit" not in st.session_state.prices_data.columns:
@@ -79,7 +79,7 @@ with st.sidebar:
         "Select Section", 
         [
             "🏠 Dashboard Overview", 
-            "🛍️ Baahir Ki Khareedari (Purchases)",
+            "🛍️ Stock Purchases",
             "📦 Daily Inventory & Stock", 
             "🏷️ Pricing & Items Master", 
             "📈 Profit & Loss Reports",
@@ -111,17 +111,26 @@ if nav_option == "🏠 Dashboard Overview":
             m3.metric("Total Wastage Count", float(latest_df["Wastage"].sum()) if "Wastage" in latest_df.columns else 0.0)
             
             st.dataframe(latest_df, use_container_width=True)
+            
+            # Export Options
+            csv_data = latest_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Download Dashboard Report (CSV)",
+                data=csv_data,
+                file_name=f"dashboard_inventory_{latest_date}.csv",
+                mime="text/csv"
+            )
         else:
             st.info("ℹ️ Saved record is empty.")
     else:
         st.info("ℹ️ No inventory records saved yet.")
 
 # ==========================================
-# SCREEN 2: 🛍️ BAAHIR KI KHAREEDARI (PURCHASES)
+# SCREEN 2: 🛍️ STOCK PURCHASES
 # ==========================================
-elif nav_option == "🛍️ Baahir Ki Khareedari (Purchases)":
-    st.title("🛍️ Market Se Saman Ki Khareedari (Purchases)")
-    st.write("Jo saman aap baahir se le kar aaye hain uski entry yahan karein:")
+elif nav_option == "🛍️ Stock Purchases":
+    st.title("🛍️ Outside Market Purchases Log")
+    st.write("Record all items and inventory bought from outside markets:")
 
     col_p1, col_p2 = st.columns(2)
     with col_p1:
@@ -131,23 +140,26 @@ elif nav_option == "🛍️ Baahir Ki Khareedari (Purchases)":
 
     st.markdown("---")
     
-    # Existing Items Dropdown / Custom Item Entry
     known_items_list = list(st.session_state.prices_data["Item Name"].unique()) if "Item Name" in st.session_state.prices_data.columns else []
-    
+    if os.path.exists(INVENTORY_FILE):
+        inv_f = pd.read_csv(INVENTORY_FILE)
+        if "Item Name" in inv_f.columns:
+            known_items_list = list(set(known_items_list + list(inv_f["Item Name"].unique())))
+
     with st.form("purchase_form", clear_on_submit=True):
-        st.subheader("➕ Nayi Khareedari Add Karein")
+        st.subheader("➕ Add New Purchase Entry")
         p_col1, p_col2, p_col3, p_col4 = st.columns([2, 1, 1, 1])
         
         with p_col1:
-            item_selected = st.selectbox("Item Select Karein", known_items_list + ["+ Naya Item Add Karein"])
-            if item_selected == "+ Naya Item Add Karein":
+            item_selected = st.selectbox("Select Item", known_items_list + ["+ Add New Custom Item"])
+            if item_selected == "+ Add New Custom Item":
                 item_selected = st.text_input("Enter New Item Name")
         with p_col2:
-            p_qty = st.number_input("Khareedi Gai Qty", min_value=0.0, step=0.1)
+            p_qty = st.number_input("Purchased Quantity", min_value=0.0, step=0.1)
         with p_col3:
             p_unit = st.selectbox("Unit", ["Pieces", "KG", "Grams", "Liters", "Portion"])
         with p_col4:
-            p_cost = st.number_input("Total Amount (Rs.)", min_value=0.0, step=10.0)
+            p_cost = st.number_input("Total Amount Spent (Rs.)", min_value=0.0, step=10.0)
             
         submit_purchase = st.form_submit_button("💾 Save Purchase Record")
 
@@ -181,15 +193,15 @@ elif nav_option == "🛍️ Baahir Ki Khareedari (Purchases)":
         if not day_p.empty:
             st.dataframe(day_p[["Item Name", "Quantity", "Unit", "Total Purchase Cost", "Vendor/Notes"]], use_container_width=True)
             tot_day_spend = day_p["Total Purchase Cost"].sum()
-            st.success(f"💰 **Aaj Ka Total Khareedari Bill:** Rs. {tot_day_spend:,.2f}")
+            st.success(f"💰 **Total Expense for Today:** Rs. {tot_day_spend:,.2f}")
         else:
-            st.info("Iss date par abhi koi purchase add nahi hui.")
+            st.info("No purchases recorded for this date yet.")
 
 # ==========================================
 # SCREEN 3: 📦 DAILY INVENTORY & STOCK
 # ==========================================
 elif nav_option == "📦 Daily Inventory & Stock":
-    st.title("📦 Easy Daily Inventory & Stock Usage")
+    st.title("📦 Daily Inventory & Stock Tracker")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -210,7 +222,6 @@ elif nav_option == "📦 Daily Inventory & Stock":
             saved_data_found = True
 
     if not saved_data_found:
-        # Load items list
         all_known_items = []
         if os.path.exists(INVENTORY_FILE):
             inv_f = pd.read_csv(INVENTORY_FILE)
@@ -221,7 +232,6 @@ elif nav_option == "📦 Daily Inventory & Stock":
             price_df = st.session_state.prices_data.copy()
             all_known_items = price_df[["Item Name", "Unit"]].to_dict('records') if "Unit" in price_df.columns else [{"Item Name": name, "Unit": "Pieces"} for name in price_df["Item Name"]]
 
-        # Auto fetch Purchases for selected date
         today_purchases = {}
         if os.path.exists(PURCHASES_FILE):
             purch_df = pd.read_csv(PURCHASES_FILE)
@@ -229,7 +239,6 @@ elif nav_option == "📦 Daily Inventory & Stock":
             if not purch_df_today.empty:
                 today_purchases = purch_df_today.groupby("Item Name")["Quantity"].sum().to_dict()
 
-        # Kal ka closing stock
         yesterday_date = str(selected_date - timedelta(days=1))
         yesterday_stock = {}
         if not existing_df.empty and "Date" in existing_df.columns:
@@ -243,7 +252,7 @@ elif nav_option == "📦 Daily Inventory & Stock":
             item_name = item["Item Name"]
             unit_val = item.get("Unit", "Pieces")
             op_val = yesterday_stock.get(item_name, 0.0)
-            add_val = today_purchases.get(item_name, 0.0) # Auto fill from Purchases module
+            add_val = today_purchases.get(item_name, 0.0)
             
             rows.append({
                 "Item Name": item_name, 
@@ -261,13 +270,13 @@ elif nav_option == "📦 Daily Inventory & Stock":
         if col not in default_inv.columns:
             default_inv[col] = 0.0
 
-    st.subheader("📝 Daily Stock & Usage Data Sheet")
+    st.subheader("📝 Edit Inventory Sheet")
     
     column_config = {
         "Unit": st.column_config.SelectboxColumn("Unit", options=["Pieces", "KG", "Grams", "Liters", "Portion"], required=True),
         "Opening Stock": st.column_config.NumberColumn("Opening Stock", step=0.1, format="%.2f"),
-        "New Purchased": st.column_config.NumberColumn("New Purchased Stock", step=0.1, format="%.2f"),
-        "Sale / Used": st.column_config.NumberColumn("Sale / Used Qty", step=0.1, format="%.2f"),
+        "New Purchased": st.column_config.NumberColumn("New Purchased", step=0.1, format="%.2f"),
+        "Sale / Used": st.column_config.NumberColumn("Sale / Used", step=0.1, format="%.2f"),
         "Wastage": st.column_config.NumberColumn("Wastage", step=0.1, format="%.2f"),
         "Return": st.column_config.NumberColumn("Return", step=0.1, format="%.2f"),
     }
@@ -283,21 +292,21 @@ elif nav_option == "📦 Daily Inventory & Stock":
     if not edited_inventory.empty:
         df = edited_inventory.copy()
         
-        # Explicit calculations for total stock, used stock, and remaining balance
         df["Total Available Stock"] = df["Opening Stock"] + df["New Purchased"]
         df["Total Consumed/Used"] = df["Sale / Used"] + df["Wastage"]
         df["Remaining Stock (Actual)"] = df["Total Available Stock"] - df["Total Consumed/Used"] + df["Return"]
         
         df["Date"] = str(selected_date)
         df["Shift"] = shift
-        df["Sale"] = df["Sale / Used"] # Internal map for profit report compatibility
+        df["Sale"] = df["Sale / Used"]
         df["Actual"] = df["Remaining Stock (Actual)"]
 
-        st.markdown("### 📊 Calculated Stock Usage Summary")
+        st.markdown("### 📊 Auto-Calculated Final Summary")
         summary_cols = ["Item Name", "Unit", "Opening Stock", "New Purchased", "Total Available Stock", "Sale / Used", "Wastage", "Remaining Stock (Actual)"]
         st.dataframe(df[summary_cols], use_container_width=True)
 
-        col_sv1, col_sv2 = st.columns([2, 1])
+        col_sv1, col_sv2, col_sv3 = st.columns([1.5, 1.5, 1.5])
+        
         with col_sv1:
             if st.button("💾 Save Inventory Record", type="primary"):
                 if os.path.exists(INVENTORY_FILE):
@@ -308,10 +317,21 @@ elif nav_option == "📦 Daily Inventory & Stock":
                     updated_df = df
                 
                 updated_df.to_csv(INVENTORY_FILE, index=False)
-                st.success("✅ Daily inventory and stock usage saved successfully!")
+                st.success("✅ Inventory record saved successfully!")
                 st.rerun()
 
         with col_sv2:
+            # WhatsApp Integration Link
+            whatsapp_msg = f"*🍕 Cheesy Delights Inventory Summary ({selected_date} - {shift})*\n\n"
+            for _, row in df.iterrows():
+                if row['Sale / Used'] > 0 or row['Remaining Stock (Actual)'] > 0:
+                    whatsapp_msg += f"• *{row['Item Name']}*: Used = {row['Sale / Used']} {row['Unit']}, Remaining = {row['Remaining Stock (Actual)']}\n"
+            
+            encoded_msg = urllib.parse.quote(whatsapp_msg)
+            whatsapp_url = f"https://wa.me/?text={encoded_msg}"
+            st.markdown(f'<a href="{whatsapp_url}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:9px 16px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%;">📲 Share via WhatsApp</button></a>', unsafe_allow_html=True)
+
+        with col_sv3:
             if saved_data_found:
                 if st.button("🗑️ Delete Saved Record", type="secondary"):
                     full_df = pd.read_csv(INVENTORY_FILE)
@@ -319,6 +339,14 @@ elif nav_option == "📦 Daily Inventory & Stock":
                     full_df.to_csv(INVENTORY_FILE, index=False)
                     st.success(f"🗑️ Deleted inventory record for {selected_date}")
                     st.rerun()
+
+        st.markdown("---")
+        st.download_button(
+            label="📥 Download Today's Inventory Sheet (CSV)",
+            data=df[summary_cols].to_csv(index=False).encode('utf-8'),
+            file_name=f"inventory_{selected_date}_{shift}.csv",
+            mime="text/csv"
+        )
 
 # ==========================================
 # SCREEN 4: 🏷️ PRICING & ITEMS MASTER
@@ -369,22 +397,100 @@ elif nav_option == "📈 Profit & Loss Reports":
         merged_rep["Revenue"] = merged_rep["Sale"] * merged_rep[s_price_col]
         merged_rep["Cost"] = merged_rep["Sale"] * merged_rep[p_price_col]
         merged_rep["Gross Profit"] = merged_rep["Revenue"] - merged_rep["Cost"]
-        
-        all_available_dates = sorted(merged_rep["Date"].dropna().unique(), reverse=True)
-        if len(all_available_dates) > 0:
-            selected_daily_date = st.selectbox("Select Date", all_available_dates)
-            daily_data = merged_rep[merged_rep["Date"] == str(selected_daily_date)]
-            
-            d_rev = daily_data["Revenue"].sum()
-            d_cost = daily_data["Cost"].sum()
-            d_profit = daily_data["Gross Profit"].sum()
-            
-            d1, d2, d3 = st.columns(3)
-            d1.metric("Daily Revenue", f"Rs. {d_rev:,.2f}")
-            d2.metric("Daily Cost", f"Rs. {d_cost:,.2f}")
-            d3.metric("Daily Gross Profit", f"Rs. {d_profit:,.2f}")
-            
-            st.dataframe(daily_data[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
+        merged_rep["Date_dt"] = pd.to_datetime(merged_rep["Date"], errors='coerce')
+
+        report_type = st.tabs(["📅 Daily Report", "🗓️ Monthly Report", "📆 Yearly Report"])
+
+        # DAILY REPORT TAB
+        with report_type[0]:
+            all_available_dates = sorted(merged_rep["Date"].dropna().unique(), reverse=True)
+            if len(all_available_dates) > 0:
+                col_d1, col_d2 = st.columns([3, 1])
+                with col_d1:
+                    selected_daily_date = st.selectbox("Select Date", all_available_dates)
+                
+                daily_data = merged_rep[merged_rep["Date"] == str(selected_daily_date)]
+                
+                d_rev = daily_data["Revenue"].sum()
+                d_cost = daily_data["Cost"].sum()
+                d_profit = daily_data["Gross Profit"].sum()
+                
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Daily Revenue", f"Rs. {d_rev:,.2f}")
+                m2.metric("Daily Cost", f"Rs. {d_cost:,.2f}")
+                m3.metric("Daily Gross Profit", f"Rs. {d_profit:,.2f}")
+                
+                st.dataframe(daily_data[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
+                
+                col_dl, col_del = st.columns([2, 1])
+                with col_dl:
+                    st.download_button(
+                        label="📥 Save Daily Report (CSV)",
+                        data=daily_data.to_csv(index=False).encode('utf-8'),
+                        file_name=f"profit_loss_daily_{selected_daily_date}.csv",
+                        mime="text/csv"
+                    )
+                with col_del:
+                    if st.button("🗑️ Delete Record for Selected Date", type="primary"):
+                        full_df = pd.read_csv(INVENTORY_FILE)
+                        updated_df = full_df[full_df["Date"] != str(selected_daily_date)]
+                        updated_df.to_csv(INVENTORY_FILE, index=False)
+                        st.success(f"🗑️ Record deleted for {selected_daily_date}")
+                        st.rerun()
+
+        # MONTHLY REPORT TAB
+        with report_type[1]:
+            merged_rep["Month_Year"] = merged_rep["Date_dt"].dt.strftime('%Y-%m')
+            all_months = sorted(merged_rep["Month_Year"].dropna().unique(), reverse=True)
+            if len(all_months) > 0:
+                selected_month = st.selectbox("Select Month", all_months)
+                monthly_data = merged_rep[merged_rep["Month_Year"] == selected_month]
+                
+                m_rev = monthly_data["Revenue"].sum()
+                m_cost = monthly_data["Cost"].sum()
+                m_profit = monthly_data["Gross Profit"].sum()
+                
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Monthly Revenue", f"Rs. {m_rev:,.2f}")
+                m2.metric("Monthly Cost", f"Rs. {m_cost:,.2f}")
+                m3.metric("Monthly Gross Profit", f"Rs. {m_profit:,.2f}")
+                
+                st.dataframe(monthly_data[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
+                
+                st.download_button(
+                    label="📥 Save Monthly Report (CSV)",
+                    data=monthly_data.to_csv(index=False).encode('utf-8'),
+                    file_name=f"profit_loss_monthly_{selected_month}.csv",
+                    mime="text/csv"
+                )
+
+        # YEARLY REPORT TAB
+        with report_type[2]:
+            merged_rep["Year"] = merged_rep["Date_dt"].dt.strftime('%Y')
+            all_years = sorted(merged_rep["Year"].dropna().unique(), reverse=True)
+            if len(all_years) > 0:
+                selected_year = st.selectbox("Select Year", all_years)
+                yearly_data = merged_rep[merged_rep["Year"] == selected_year]
+                
+                y_rev = yearly_data["Revenue"].sum()
+                y_cost = yearly_data["Cost"].sum()
+                y_profit = yearly_data["Gross Profit"].sum()
+                
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Yearly Revenue", f"Rs. {y_rev:,.2f}")
+                m2.metric("Yearly Cost", f"Rs. {y_cost:,.2f}")
+                m3.metric("Yearly Gross Profit", f"Rs. {y_profit:,.2f}")
+                
+                st.dataframe(yearly_data[["Date", "Shift", "Item Name", "Unit", "Sale", "Revenue", "Cost", "Gross Profit"]], use_container_width=True)
+                
+                st.download_button(
+                    label="📥 Save Yearly Report (CSV)",
+                    data=yearly_data.to_csv(index=False).encode('utf-8'),
+                    file_name=f"profit_loss_yearly_{selected_year}.csv",
+                    mime="text/csv"
+                )
+    else:
+        st.info("ℹ️ No inventory records saved yet to calculate Profit & Loss.")
 
 # ==========================================
 # SCREEN 6: ⚙️ SETTINGS
@@ -396,4 +502,4 @@ else:
         new_password = st.text_input("New Password", value=saved_pass, type="password")
         if st.form_submit_button("Update Password"):
             pd.DataFrame({"Key": ["username", "password"], "Value": [new_username, new_password]}).to_csv(AUTH_FILE, index=False)
-            st.success("✅ Password updated!")
+            st.success("✅ Password updated successfully!")
