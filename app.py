@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 from datetime import date, timedelta
 import os
 
@@ -91,24 +90,20 @@ if nav == "💬 Chat with AI Manager":
     st.markdown("<h2 style='color: #38BDF8;'>🤖 AI Restaurant Operations Copilot</h2>", unsafe_allow_html=True)
     st.caption("Aap apne live inventory database se koi bhi sawal Urdu ya English mein pooch sakte hain:")
 
-    # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = [
             {"role": "assistant", "content": "Salam! Main aapka Cheesy Delights AI Assistant hoon. Stock, Sales, ya Wastage se mutaliq koi bhi sawal poochein!"}
         ]
 
-    # Render previous messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # Chat Input
     if user_prompt := st.chat_input("Poochein (e.g., 'Kaunsi item khatam hone wali hai?' ya 'Wastage ka batao'):"):
         st.session_state.messages.append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
             st.markdown(user_prompt)
 
-        # AI Response Logic based on real data
         ai_reply = ""
         prompt_lower = user_prompt.lower()
 
@@ -146,7 +141,6 @@ if nav == "💬 Chat with AI Manager":
         else:
             ai_reply = "Pehle daily stock log add karein taake main aapko sahi figures bata sakoon."
 
-        # Display AI Response
         with st.chat_message("assistant"):
             st.markdown(ai_reply)
         st.session_state.messages.append({"role": "assistant", "content": ai_reply})
@@ -170,6 +164,13 @@ elif nav == "📊 Executive Operations Center":
             low_stock_count = len(merged[merged["Remaining Stock"] <= merged["Min Stock Alert"]])
             m3.metric("Critical Restock Items", f"{low_stock_count} Items")
             m4.metric("Active Date", latest_date)
+
+            st.markdown("---")
+            
+            # Built-in Streamlit Bar Chart (No Plotly required)
+            st.subheader("📦 Stock Level Overview")
+            chart_data = curr.set_index("Item Name")[["Used/Sold", "Remaining Stock"]]
+            st.bar_chart(chart_data)
 
             st.markdown("---")
             st.dataframe(curr, use_container_width=True)
