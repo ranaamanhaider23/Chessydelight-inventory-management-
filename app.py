@@ -1,34 +1,26 @@
 import streamlit as st
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 import os
 
 # ==========================================
-# 🎨 ULTRA-PRO RESTAURANT UI / THEME
+# 🎨 UI & THEME SETUP
 # ==========================================
-st.set_page_config(page_title="Cheesy Delights | Pro Restaurant OS", layout="wide", page_icon="🍕")
+st.set_page_config(page_title="Cheesy Delights | Fast Inventory OS", layout="wide", page_icon="🍕")
 
 st.markdown("""
     <style>
-        .stApp { background-color: #0B0F19; color: #E2E8F0; }
+        .stApp { background-color: #0F172A; color: #F8FAFC; }
         
         div[data-testid="stMetric"] {
             background: #1E293B;
             border: 1px solid #334155;
             padding: 16px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
-        div[data-testid="stMetric"] label { color: #94A3B8 !important; font-size: 13px !important; font-weight: 600; }
-        div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #38BDF8 !important; font-size: 22px !important; font-weight: 700; }
-
-        .status-card-danger {
-            background-color: rgba(239, 68, 68, 0.1);
-            border-left: 4px solid #EF4444;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-        }
+        div[data-testid="stMetric"] label { color: #94A3B8 !important; font-size: 14px !important; font-weight: 600; }
+        div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #38BDF8 !important; font-size: 24px !important; font-weight: 700; }
 
         .stButton>button {
             border-radius: 8px;
@@ -37,6 +29,7 @@ st.markdown("""
             color: white;
             border: none;
             padding: 8px 16px;
+            width: 100%;
         }
         
         section[data-testid="stSidebar"] { background-color: #020617; border-right: 1px solid #1E293B; }
@@ -44,229 +37,172 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 📁 FILE SYSTEM SETUP
+# 📁 DATA INITIALIZATION
 # ==========================================
-INVENTORY_FILE = "rest_inventory.csv"
-PURCHASES_FILE = "rest_purchases.csv"
-ITEMS_MASTER_FILE = "rest_items_master.csv"
+INVENTORY_FILE = "stock_balance.csv"
+PURCHASES_FILE = "invoice_history.csv"
 
-if not os.path.exists(ITEMS_MASTER_FILE):
-    default_items = pd.DataFrame([
-        {"Item Name": "Chicken Patty", "Category": "Raw Material", "Unit": "Pieces", "Min Stock Alert": 20, "Cost Price": 120.0},
-        {"Item Name": "Burger Buns", "Category": "Raw Material", "Unit": "Pieces", "Min Stock Alert": 30, "Cost Price": 30.0},
-        {"Item Name": "Cheddar Cheese Slice", "Category": "Raw Material", "Unit": "Pieces", "Min Stock Alert": 50, "Cost Price": 25.0},
-        {"Item Name": "French Fries (Frozen)", "Category": "Raw Material", "Unit": "KG", "Min Stock Alert": 5, "Cost Price": 400.0},
-        {"Item Name": "Cooking Oil", "Category": "Raw Material", "Unit": "Liters", "Min Stock Alert": 10, "Cost Price": 550.0},
-        {"Item Name": "Burger Packing Box", "Category": "Packaging", "Unit": "Pieces", "Min Stock Alert": 50, "Cost Price": 15.0},
-        {"Item Name": "Cold Drink 345ml", "Category": "Beverages", "Unit": "Pieces", "Min Stock Alert": 24, "Cost Price": 60.0}
+# Pre-populating default master items based on your invoice
+if not os.path.exists(INVENTORY_FILE):
+    df_init = pd.DataFrame([
+        {"Item Name": "Dawn Burger Bun (2 pcs pack)", "Category": "Dry / B B", "Current Stock": 2.0, "Unit": "Pcs", "Min Alert": 5},
+        {"Item Name": "Arfa Yellow Cheese (2kg pack)", "Category": "Cheese", "Current Stock": 1.0, "Unit": "Pcs", "Min Alert": 2},
+        {"Item Name": "Karachi Fajita Topping", "Category": "Topping", "Current Stock": 2.0, "Unit": "Pcs", "Min Alert": 3}
     ])
-    default_items.to_csv(ITEMS_MASTER_FILE, index=False)
+    df_init.to_csv(INVENTORY_FILE, index=False)
 
-master_items_df = pd.read_csv(ITEMS_MASTER_FILE)
+stock_df = pd.read_csv(INVENTORY_FILE)
 
 # ==========================================
 # 🧭 SIDEBAR NAVIGATION
 # ==========================================
 with st.sidebar:
     st.markdown("<h1 style='color: #F59E0B; text-align: center;'>🍕 Cheesy Delights</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #64748B; text-align: center; font-size:12px;'>COMMERCIAL RESTAURANT ENGINE</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #94A3B8; text-align: center; font-size:12px;'>Satyana Road Branch</p>", unsafe_allow_html=True)
     st.markdown("---")
     
     nav = st.radio(
-        "MODULES",
+        "MENU",
         [
-            "💬 Chat with AI Manager",
-            "📊 Executive Operations Center",
-            "📦 Daily Stock & Usage Log",
-            "🛍️ Vendor Purchasing Log",
-            "🏷️ Master Inventory Items"
+            "📊 Live Stock Balance",
+            "🧾 Quick Invoice Entry",
+            "🔥 Record Usage / Sales",
+            "🤖 AI Inventory Assistant"
         ]
     )
 
 # ==========================================
-# MODULE 1: 💬 LIVE CHAT WITH AI MANAGER
+# MODULE 1: LIVE STOCK BALANCE
 # ==========================================
-if nav == "💬 Chat with AI Manager":
-    st.markdown("<h2 style='color: #38BDF8;'>🤖 AI Restaurant Operations Copilot</h2>", unsafe_allow_html=True)
-    st.caption("Aap apne live inventory database se koi bhi sawal Urdu ya English mein pooch sakte hain:")
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "assistant", "content": "Salam! Main aapka Cheesy Delights AI Assistant hoon. Stock, Sales, ya Wastage se mutaliq koi bhi sawal poochein!"}
-        ]
-
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    if user_prompt := st.chat_input("Poochein (e.g., 'Kaunsi item khatam hone wali hai?' ya 'Wastage ka batao'):"):
-        st.session_state.messages.append({"role": "user", "content": user_prompt})
-        with st.chat_message("user"):
-            st.markdown(user_prompt)
-
-        ai_reply = ""
-        prompt_lower = user_prompt.lower()
-
-        if os.path.exists(INVENTORY_FILE):
-            inv_data = pd.read_csv(INVENTORY_FILE)
-            if not inv_data.empty:
-                latest_d = inv_data["Date"].max()
-                latest_inv = inv_data[inv_data["Date"] == latest_d]
-                merged = pd.merge(latest_inv, master_items_df, on="Item Name", how="left")
-
-                if any(k in prompt_lower for k in ["khatam", "low", "stock", "restock", "order"]):
-                    lows = merged[merged["Remaining Stock"] <= merged["Min Stock Alert"]]
-                    if not lows.empty:
-                        items_str = ", ".join([f"**{r['Item Name']}** ({r['Remaining Stock']} {r['Unit_x']} left)" for _, r in lows.iterrows()])
-                        ai_reply = f"🚨 **Low Stock Alert ({latest_d}):** Yeh items minimum level se neeche hain: {items_str}. Inka market order lagayein!"
-                    else:
-                        ai_reply = f"✅ Sab items ka stock filhal sahi hai! Kisi item ka level critical nahi hai."
-
-                elif any(k in prompt_lower for k in ["zaya", "wastage", "waste", "kharab"]):
-                    wasted = latest_inv[latest_inv["Wastage"] > 0]
-                    if not wasted.empty:
-                        w_str = ", ".join([f"**{r['Item Name']}**: {r['Wastage']} {r['Unit']}" for _, r in wasted.iterrows()])
-                        ai_reply = f"🗑️ **Wastage Summary ({latest_d}):** Aaj yeh items zaya hui hain: {w_str}."
-                    else:
-                        ai_reply = f"✨ Bohot zabardast! {latest_d} ko koi wastage record nahi hui."
-
-                elif any(k in prompt_lower for k in ["sale", "used", "bik", "bika"]):
-                    top_item = latest_inv.loc[latest_inv["Used/Sold"].idxmax()]
-                    ai_reply = f"🔥 **Top Used Item ({latest_d}):** Aaj sab se ziada **{top_item['Item Name']}** use/sell hui hai ({top_item['Used/Sold']} {top_item['Unit']})."
-
-                else:
-                    ai_reply = f"📊 Main aapke **{latest_d}** ke data se connected hoon. Total **{len(latest_inv)} items** track ho rahi hain. Aap specific item ka naam, low stock, ya wastage ka pooch sakte hain!"
-            else:
-                ai_reply = "System mein abhi koi stock data save nahi hai. Pehle 'Daily Stock & Usage Log' mein entry karein."
-        else:
-            ai_reply = "Pehle daily stock log add karein taake main aapko sahi figures bata sakoon."
-
-        with st.chat_message("assistant"):
-            st.markdown(ai_reply)
-        st.session_state.messages.append({"role": "assistant", "content": ai_reply})
-
-# ==========================================
-# MODULE 2: 📊 EXECUTIVE OPERATIONS CENTER
-# ==========================================
-elif nav == "📊 Executive Operations Center":
-    st.markdown("<h2 style='color: #38BDF8;'>📊 Real-time Restaurant Stock Dashboard</h2>", unsafe_allow_html=True)
+if nav == "📊 Live Stock Balance":
+    st.markdown("<h2 style='color: #38BDF8;'>📦 Live Kitchen Stock Balance</h2>", unsafe_allow_html=True)
+    st.caption("Aapke paas kitchen mein is waqt kitna maal bacha hua hai:")
     
-    if os.path.exists(INVENTORY_FILE):
-        inv_df = pd.read_csv(INVENTORY_FILE)
-        if not inv_df.empty:
-            latest_date = inv_df["Date"].max()
-            curr = inv_df[inv_df["Date"] == latest_date]
-            merged = pd.merge(curr, master_items_df, on="Item Name", how="left")
+    cols = st.columns(3)
+    for idx, row in stock_df.iterrows():
+        col = cols[idx % 3]
+        col.metric(
+            label=row["Item Name"], 
+            value=f"{row['Current Stock']} {row['Unit']}",
+            delta="Low Stock!" if row['Current Stock'] <= row['Min Alert'] else "Sufficient",
+            delta_color="inverse" if row['Current Stock'] <= row['Min Alert'] else "normal"
+        )
+
+    st.markdown("---")
+    st.subheader("📋 Complete Stock Sheet")
+    st.dataframe(stock_df, use_container_width=True)
+
+# ==========================================
+# MODULE 2: QUICK INVOICE ENTRY
+# ==========================================
+elif nav == "🧾 Quick Invoice Entry":
+    st.markdown("<h2 style='color: #38BDF8;'>🧾 Fast Purchase / Invoice Logging</h2>", unsafe_allow_html=True)
+    st.caption("Jab bhi vendor se raw material ka bill aaye, yahan se 2 clicks mein add karein:")
+    
+    with st.form("invoice_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            inv_no = st.text_input("Invoice No.", value="608547")
+        with c2:
+            inv_date = st.date_input("Date", date.today())
+        
+        st.markdown("---")
+        item_selected = st.selectbox("Select Item Received", stock_df["Item Name"].tolist())
+        
+        c3, c4 = st.columns(2)
+        with c3:
+            qty_added = st.number_input("Quantity Received (Pcs/Packs)", min_value=1.0, step=1.0, value=1.0)
+        with c4:
+            rate = st.number_input("Rate per Unit (Rs.)", min_value=0.0, step=10.0, value=100.0)
             
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Tracked Items", len(curr))
-            m2.metric("Total Used Today", f"{curr['Used/Sold'].sum():,.1f}")
-            low_stock_count = len(merged[merged["Remaining Stock"] <= merged["Min Stock Alert"]])
-            m3.metric("Critical Restock Items", f"{low_stock_count} Items")
-            m4.metric("Active Date", latest_date)
-
-            st.markdown("---")
+        submit_inv = st.form_submit_button("➕ Save Invoice & Update Stock")
+        
+        if submit_inv:
+            stock_df.loc[stock_df["Item Name"] == item_selected, "Current Stock"] += qty_added
+            stock_df.to_csv(INVENTORY_FILE, index=False)
             
-            # Built-in Streamlit Bar Chart (No Plotly required)
-            st.subheader("📦 Stock Level Overview")
-            chart_data = curr.set_index("Item Name")[["Used/Sold", "Remaining Stock"]]
-            st.bar_chart(chart_data)
-
-            st.markdown("---")
-            st.dataframe(curr, use_container_width=True)
-        else:
-            st.info("No active stock entries recorded yet.")
-    else:
-        st.info("Please complete daily stock entry to display analytics.")
-
-# ==========================================
-# MODULE 3: 📦 DAILY STOCK & USAGE LOG
-# ==========================================
-elif nav == "📦 Daily Stock & Usage Log":
-    st.markdown("<h2 style='color: #38BDF8;'>📦 Daily Restaurant Inventory Tracking</h2>", unsafe_allow_html=True)
-    
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
-        entry_date = st.date_input("Entry Date", date.today())
-    with col_d2:
-        shift = st.selectbox("Shift", ["Evening Shift", "Morning Shift", "Full Operational Day"])
-
-    master = pd.read_csv(ITEMS_MASTER_FILE)
-    saved_data = False
-    
-    if os.path.exists(INVENTORY_FILE):
-        all_inv = pd.read_csv(INVENTORY_FILE)
-        match = all_inv[(all_inv["Date"] == str(entry_date)) & (all_inv["Shift"] == shift)]
-        if not match.empty:
-            df_editor = match.copy()
-            saved_data = True
-
-    if not saved_data:
-        rows = []
-        for _, r in master.iterrows():
-            rows.append({
-                "Item Name": r["Item Name"],
-                "Category": r["Category"],
-                "Unit": r["Unit"],
-                "Opening Stock": 0.0,
-                "New Purchased": 0.0,
-                "Used/Sold": 0.0,
-                "Wastage": 0.0
-            })
-        df_editor = pd.DataFrame(rows)
-
-    cols = ["Item Name", "Category", "Unit", "Opening Stock", "New Purchased", "Used/Sold", "Wastage"]
-    edited = st.data_editor(df_editor[cols], num_rows="dynamic", use_container_width=True, key=f"editor_{entry_date}_{shift}")
-
-    if not edited.empty:
-        df_final = edited.copy()
-        df_final["Remaining Stock"] = (df_final["Opening Stock"] + df_final["New Purchased"]) - (df_final["Used/Sold"] + df_final["Wastage"])
-        df_final["Date"] = str(entry_date)
-        df_final["Shift"] = shift
-
-        if st.button("💾 Save Daily Log", type="primary", use_container_width=True):
-            existing = pd.read_csv(INVENTORY_FILE) if os.path.exists(INVENTORY_FILE) else pd.DataFrame()
-            if not existing.empty:
-                existing = existing[~((existing["Date"] == str(entry_date)) & (existing["Shift"] == shift))]
-            res = pd.concat([existing, df_final], ignore_index=True)
-            res.to_csv(INVENTORY_FILE, index=False)
-            st.success("✅ Stock Record Saved!")
+            new_purchase = pd.DataFrame([{
+                "Invoice No": inv_no,
+                "Date": str(inv_date),
+                "Item": item_selected,
+                "Qty": qty_added,
+                "Rate": rate,
+                "Total Amount": qty_added * rate
+            }])
+            
+            hist = pd.read_csv(PURCHASES_FILE) if os.path.exists(PURCHASES_FILE) else pd.DataFrame()
+            updated_hist = pd.concat([hist, new_purchase], ignore_index=True)
+            updated_hist.to_csv(PURCHASES_FILE, index=False)
+            
+            st.success(f"✅ Added {qty_added} x '{item_selected}' to Stock!")
             st.rerun()
 
 # ==========================================
-# MODULE 4: 🛍️ VENDOR PURCHASING LOG
+# MODULE 3: RECORD USAGE / SALES
 # ==========================================
-elif nav == "🛍️ Vendor Purchasing Log":
-    st.markdown("<h2 style='color: #38BDF8;'>🛍️ Market & Vendor Purchases Log</h2>", unsafe_allow_html=True)
+elif nav == "🔥 Record Usage / Sales":
+    st.markdown("<h2 style='color: #38BDF8;'>🔥 Deduct Used Items From Kitchen</h2>", unsafe_allow_html=True)
+    st.caption("Jab items istemal ho jayein toh stock minus karein:")
     
-    with st.form("purchase_form", clear_on_submit=True):
-        st.subheader("➕ Log Vendor Bill / Purchase")
-        p_date = st.date_input("Purchase Date", date.today())
-        p_item = st.selectbox("Select Item", master_items_df["Item Name"].tolist())
-        p_qty = st.number_input("Quantity Received", min_value=0.0, step=1.0)
-        p_cost = st.number_input("Total Bill Amount (Rs.)", min_value=0.0, step=50.0)
-        p_vendor = st.text_input("Vendor Name / Bill No.")
-        
-        if st.form_submit_button("💾 Save Vendor Invoice"):
-            new_p = pd.DataFrame([{
-                "Date": str(p_date),
-                "Item Name": p_item,
-                "Quantity": p_qty,
-                "Total Cost": p_cost,
-                "Vendor/Bill": p_vendor
-            }])
-            existing = pd.read_csv(PURCHASES_FILE) if os.path.exists(PURCHASES_FILE) else pd.DataFrame()
-            updated = pd.concat([existing, new_p], ignore_index=True)
-            updated.to_csv(PURCHASES_FILE, index=False)
-            st.success("✅ Purchase Logged!")
+    use_item = st.selectbox("Which item was used?", stock_df["Item Name"].tolist())
+    use_qty = st.number_input("How much quantity was used?", min_value=0.1, step=0.5, value=1.0)
+    
+    if st.button("🔴 Deduct From Stock"):
+        curr_val = stock_df.loc[stock_df["Item Name"] == use_item, "Current Stock"].values[0]
+        if curr_val >= use_qty:
+            stock_df.loc[stock_df["Item Name"] == use_item, "Current Stock"] -= use_qty
+            stock_df.to_csv(INVENTORY_FILE, index=False)
+            st.success(f"✅ Deducted {use_qty} from {use_item}. Remaining Stock: {curr_val - use_qty}")
+            st.rerun()
+        else:
+            st.error("❌ Stock mein itni quantity nahi hai!")
 
 # ==========================================
-# MODULE 5: 🏷️ MASTER INVENTORY ITEMS
+# MODULE 4: AI INVENTORY ASSISTANT
 # ==========================================
 else:
-    st.markdown("<h2 style='color: #38BDF8;'>🏷️ Master Restaurant Items Catalog</h2>", unsafe_allow_html=True)
-    
-    master_edited = st.data_editor(master_items_df, num_rows="dynamic", use_container_width=True)
-    if st.button("💾 Update Master Catalog", type="primary"):
-        master_edited.to_csv(ITEMS_MASTER_FILE, index=False)
-        st.success("✅ Master Catalog Updated!")
+    st.markdown("<h2 style='color: #38BDF8;'>🤖 AI Restaurant Assistant</h2>", unsafe_allow_html=True)
+    st.caption("Apne inventory data se mutaliq koi bhi sawal Urdu ya English mein poochein:")
+
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = [
+            {"role": "assistant", "content": "Salam! Main Cheesy Delights ka AI Copilot hoon. Stock balance, low stock, ya purchases ke baray mein poochein!"}
+        ]
+
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if user_prompt := st.chat_input("Poochein (e.g., 'Cheese kitni bachi hai?' ya 'Kya stock low hai?'):"):
+        st.session_state.chat_messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user"):
+            st.markdown(user_prompt)
+
+        prompt_lower = user_prompt.lower()
+        ai_reply = ""
+
+        # AI Logic based on current CSV
+        if any(k in prompt_lower for k in ["khatam", "low", "kam", "restock"]):
+            lows = stock_df[stock_df["Current Stock"] <= stock_df["Min Alert"]]
+            if not lows.empty:
+                items_list = ", ".join([f"**{r['Item Name']}** ({r['Current Stock']} {r['Unit']} left)" for _, r in lows.iterrows()])
+                ai_reply = f"🚨 **Low Stock Alert:** Yeh items minimum level se neeche hain: {items_list}. Inko re-order karein!"
+            else:
+                ai_reply = "✅ Sab items ka stock behtareen hai! Filhal koi cheez khatam nahi hone wali."
+
+        elif any(k in prompt_lower for k in ["cheese", "fajita", "bun", "stock", "kitna"]):
+            matched = False
+            for _, r in stock_df.iterrows():
+                if any(word in r["Item Name"].lower() for word in prompt_lower.split()):
+                    ai_reply += f"📦 **{r['Item Name']}**: {r['Current Stock']} {r['Unit']} bacha hua hai.\n\n"
+                    matched = True
+            if not matched:
+                summary = "\n".join([f"- **{r['Item Name']}**: {r['Current Stock']} {r['Unit']}" for _, r in stock_df.iterrows()])
+                ai_reply = f"📊 **Current Balance:**\n{summary}"
+
+        else:
+            ai_reply = "Main aapke live stock database se connected hoon. Aap kisi specific item ka balance ya low-stock alerts pooch sakte hain!"
+
+        with st.chat_message("assistant"):
+            st.markdown(ai_reply)
+        st.session_state.chat_messages.append({"role": "assistant", "content": ai_reply})
