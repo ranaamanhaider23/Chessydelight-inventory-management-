@@ -275,15 +275,66 @@ elif page == "📦 Inventory":
                 {status}
             </div>""",unsafe_allow_html=True)
 
-    st.markdown('<div class="section">Edit Stock</div>',unsafe_allow_html=True)
-    with st.form("stock_edit"):
-        item = st.selectbox("Select Item",stock["Item Name"].tolist())
-        current = float(stock.loc[stock["Item Name"]==item,"Closing Stock"].iloc[0])
-        new_stock = st.number_input("Current Physical Stock",min_value=0.0,value=current,step=0.5)
-        if st.form_submit_button("Update Stock"):
-            stock.loc[stock["Item Name"]==item,"Closing Stock"] = new_stock
-            save_csv(stock,STOCK_FILE)
-            st.success("Stock updated.")
+    st.markdown('<div class="section">➕ Add New Item</div>',unsafe_allow_html=True)
+    with st.form("add_item", clear_on_submit=True):
+        a,b,c = st.columns(3)
+        with a: new_name = st.text_input("Item Name", placeholder="e.g. Mozzarella Cheese")
+        with b: new_category = st.text_input("Category", placeholder="e.g. Dairy")
+        with c: new_unit = st.selectbox("Unit", ["Pcs","Kg","Gram","Litre","Pack","Bottle","Box"])
+        d,e,f = st.columns(3)
+        with d: opening = st.number_input("Opening Stock", min_value=0.0, step=0.5)
+        with e: purchase_price = st.number_input("Purchase Price (Rs.)", min_value=0.0, step=10.0)
+        with f: min_alert = st.number_input("Minimum Stock Alert", min_value=0.0, step=0.5, value=2.0)
+        if st.form_submit_button("➕ Add Item", use_container_width=True):
+            if not new_name.strip():
+                st.error("Item name is required.")
+            elif new_name.strip().lower() in stock["Item Name"].astype(str).str.lower().tolist():
+                st.warning("This item already exists.")
+            else:
+                new_row = pd.DataFrame([{
+                    "Item Name":new_name.strip(),"Category":new_category.strip(),
+                    "Unit":new_unit,"Opening Stock":opening,"Purchased":0.0,
+                    "Closing Stock":opening,"Min Alert":min_alert,
+                    "Purchase Price":purchase_price
+                }])
+                save_csv(pd.concat([stock,new_row],ignore_index=True), STOCK_FILE)
+                st.success(f"✅ {new_name} added successfully.")
+                st.rerun()
+
+    st.markdown('<div class="section">✏️ Edit / 🗑️ Delete Item</div>',unsafe_allow_html=True)
+    if not stock.empty:
+        selected = st.selectbox("Select Item", stock["Item Name"].tolist(), key="manage_item")
+        row_index = stock.index[stock["Item Name"] == selected][0]
+        current = stock.loc[row_index]
+
+        with st.form("edit_item"):
+            a,b,c = st.columns(3)
+            with a: edit_name = st.text_input("Item Name", value=str(current["Item Name"]))
+            with b: edit_category = st.text_input("Category", value=str(current.get("Category","")))
+            with c: edit_unit = st.selectbox("Unit", ["Pcs","Kg","Gram","Litre","Pack","Bottle","Box"],
+                                              index=(["Pcs","Kg","Gram","Litre","Pack","Bottle","Box"].index(str(current["Unit"]))
+                                                     if str(current["Unit"]) in ["Pcs","Kg","Gram","Litre","Pack","Bottle","Box"] else 0))
+            a,b,c = st.columns(3)
+            with a: edit_stock = st.number_input("Current Stock", min_value=0.0, value=float(current["Closing Stock"]), step=0.5)
+            with b: edit_min = st.number_input("Minimum Alert", min_value=0.0, value=float(current["Min Alert"]), step=0.5)
+            with c: edit_price = st.number_input("Purchase Price", min_value=0.0, value=float(current.get("Purchase Price",0)), step=10.0)
+            if st.form_submit_button("💾 Save Changes", use_container_width=True):
+                stock.loc[row_index,"Item Name"] = edit_name.strip()
+                stock.loc[row_index,"Category"] = edit_category.strip()
+                stock.loc[row_index,"Unit"] = edit_unit
+                stock.loc[row_index,"Closing Stock"] = edit_stock
+                stock.loc[row_index,"Min Alert"] = edit_min
+                if "Purchase Price" not in stock.columns:
+                    stock["Purchase Price"] = 0.0
+                stock.loc[row_index,"Purchase Price"] = edit_price
+                save_csv(stock, STOCK_FILE)
+                st.success("✅ Item updated.")
+                st.rerun()
+
+        if st.button("🗑️ Delete Selected Item", type="secondary", use_container_width=True):
+            stock = stock[stock["Item Name"] != selected].copy()
+            save_csv(stock, STOCK_FILE)
+            st.success(f"🗑️ {selected} deleted.")
             st.rerun()
 
 # =========================================================
