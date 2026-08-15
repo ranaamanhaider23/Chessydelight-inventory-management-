@@ -144,6 +144,16 @@ sales = load_csv(SALES_FILE, ["Date","Invoice","Item","Qty","Amount","Payment"])
 expenses = load_csv(EXPENSE_FILE, ["Date","Category","Description","Amount"])
 purchases = load_csv(PURCHASE_FILE, ["Invoice","Date","Item","Qty","Amount"])
 
+
+def delete_rows_from_csv(path, mask):
+    """Delete rows matching mask and return remaining dataframe."""
+    df = pd.read_csv(path) if os.path.exists(path) else pd.DataFrame()
+    if df.empty:
+        return df
+    remaining = df.loc[~mask].copy()
+    save_csv(remaining, path)
+    return remaining
+
 # ----------------------------- Sidebar ---------------------
 with st.sidebar:
     st.markdown("""
@@ -253,6 +263,15 @@ elif page == "💰 Sales":
     st.markdown('<div class="section">Recent Sales</div>',unsafe_allow_html=True)
     st.dataframe(sales.tail(15).iloc[::-1],use_container_width=True,hide_index=True)
 
+    if not sales.empty:
+        st.markdown("### 🗑️ Delete Sale")
+        sale_idx = st.selectbox("Select sale row", list(sales.index), format_func=lambda i: f"{sales.loc[i,'Invoice']} — {sales.loc[i,'Item']} — Rs. {sales.loc[i,'Amount']}")
+        if st.button("🗑️ Delete Selected Sale", key="delete_sale"):
+            sales = sales.drop(index=sale_idx)
+            save_csv(sales, SALES_FILE)
+            st.success("Sale deleted.")
+            st.rerun()
+
 # =========================================================
 # INVENTORY
 # =========================================================
@@ -361,6 +380,15 @@ elif page == "🛒 Purchases":
     st.markdown('<div class="section">Purchase History</div>',unsafe_allow_html=True)
     st.dataframe(purchases.tail(20).iloc[::-1],use_container_width=True,hide_index=True)
 
+    if not purchases.empty:
+        st.markdown("### 🗑️ Delete Purchase")
+        purchase_idx = st.selectbox("Select purchase row", list(purchases.index), format_func=lambda i: f"{purchases.loc[i,'Invoice']} — {purchases.loc[i,'Item']} — Rs. {purchases.loc[i,'Amount']}")
+        if st.button("🗑️ Delete Selected Purchase", key="delete_purchase"):
+            purchases = purchases.drop(index=purchase_idx)
+            save_csv(purchases, PURCHASE_FILE)
+            st.success("Purchase deleted.")
+            st.rerun()
+
 # =========================================================
 # DAILY CLOSING
 # =========================================================
@@ -375,21 +403,23 @@ elif page == "🌙 Daily Closing":
             st.caption(f"Opening: {row['Opening Stock']} · Purchased: {row['Purchased']}")
         with b:
             updated[row["Item Name"]] = st.number_input("Closing stock",min_value=0.0,value=float(row["Closing Stock"]),step=0.5,key=f"close_{idx}")
-    if st.button("🔒 Save & Lock Closing",use_container_width=True):
+    if st.button("💾 Save Daily Closing", use_container_width=True):
         for item,val in updated.items():
-            stock.loc[stock["Item Name"]==item,"Closing Stock"] = val
+            stock.loc[stock["Item Name"]==item, "Closing Stock"] = val
         stock["Total Available"] = stock["Opening Stock"] + stock["Purchased"]
         stock["Total Used Today"] = stock["Total Available"] - stock["Closing Stock"]
-        save_csv(stock,STOCK_FILE)
+        save_csv(stock, STOCK_FILE)
+
         archive = stock.copy()
         archive["Date"] = str(closing_date)
         archive["Year"] = closing_date.year
         archive["Month"] = closing_date.strftime("%B")
         hist = load_csv(HISTORY_FILE, list(archive.columns))
         if not hist.empty and "Date" in hist.columns:
-            hist = hist[hist["Date"].astype(str)!=str(closing_date)]
-        save_csv(pd.concat([hist,archive],ignore_index=True),HISTORY_FILE)
-        st.success(f"Closing for {closing_date} saved.")
+            hist = hist[hist["Date"].astype(str) != str(closing_date)]
+        save_csv(pd.concat([hist,archive],ignore_index=True), HISTORY_FILE)
+
+        st.success(f"✅ Closing for {closing_date} saved successfully. You can edit it again anytime.")
         st.rerun()
 
 # =========================================================
@@ -429,3 +459,12 @@ else:
             st.rerun()
     st.markdown('<div class="section">Expense History</div>',unsafe_allow_html=True)
     st.dataframe(expenses.tail(20).iloc[::-1],use_container_width=True,hide_index=True)
+
+    if not expenses.empty:
+        st.markdown("### 🗑️ Delete Expense")
+        expense_idx = st.selectbox("Select expense row", list(expenses.index), format_func=lambda i: f"{expenses.loc[i,'Category']} — {expenses.loc[i,'Description']} — Rs. {expenses.loc[i,'Amount']}")
+        if st.button("🗑️ Delete Selected Expense", key="delete_expense"):
+            expenses = expenses.drop(index=expense_idx)
+            save_csv(expenses, EXPENSE_FILE)
+            st.success("Expense deleted.")
+            st.rerun()
