@@ -6,14 +6,12 @@ import os
 # ==========================================
 # 🎨 EXECUTIVE SAAS DASHBOARD THEME (CSS)
 # ==========================================
-st.set_page_config(page_title="Cheesy Delights | OS", layout="wide", page_icon="🍕")
+st.set_page_config(page_title="Cheesy Delights | Inventory OS", layout="wide", page_icon="🍕")
 
 st.markdown("""
     <style>
-        /* Main background & Typography */
         .stApp { background-color: #0B0F19; color: #E2E8F0; font-family: 'Inter', sans-serif; }
         
-        /* Custom Modern Cards */
         .custom-card {
             background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
             border: 1px solid #334155;
@@ -21,17 +19,14 @@ st.markdown("""
             padding: 20px;
             margin-bottom: 15px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
-            transition: transform 0.2s ease;
         }
         
         .card-header { font-size: 13px; color: #94A3B8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         .card-val { font-size: 26px; font-weight: 800; color: #38BDF8; margin: 8px 0; }
         
-        /* Custom Badges */
         .badge-green { background: rgba(16, 185, 129, 0.15); color: #34D399; border: 1px solid #059669; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
         .badge-red { background: rgba(239, 68, 68, 0.15); color: #FCA5A5; border: 1px solid #DC2626; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
         
-        /* Modern Buttons */
         .stButton>button {
             background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
             color: white !important;
@@ -43,7 +38,6 @@ st.markdown("""
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
         }
 
-        /* Sidebar Styling */
         section[data-testid="stSidebar"] { background-color: #030712; border-right: 1px solid #1E293B; }
     </style>
 """, unsafe_allow_html=True)
@@ -65,7 +59,6 @@ if not os.path.exists(TODAY_STOCK_FILE):
 
 stock_df = pd.read_csv(TODAY_STOCK_FILE)
 
-# Ensure numeric types
 for col in ["Opening Stock", "Purchased", "Closing Stock"]:
     stock_df[col] = pd.to_numeric(stock_df[col], errors='coerce').fillna(0.0)
 
@@ -119,7 +112,6 @@ elif nav == "🌙 End-of-Day Closing":
     closing_date = st.date_input("Closing Date", date.today())
     st.markdown("---")
 
-    # Dynamic Inputs per item (Better UX than tables on mobile)
     updated_closing = {}
     st.subheader("📝 Closing Quantities Enter Karein:")
     
@@ -147,7 +139,6 @@ elif nav == "🌙 End-of-Day Closing":
         stock_df["Total Used Today"] = stock_df["Total Available"] - stock_df["Closing Stock"]
         stock_df.to_csv(TODAY_STOCK_FILE, index=False)
         
-        # Monthly/Yearly Archive Log
         archive_entry = stock_df.copy()
         archive_entry["Date"] = str(closing_date)
         archive_entry["Year"] = closing_date.year
